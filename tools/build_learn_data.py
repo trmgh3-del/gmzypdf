@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-build_learn_data.py — 从 md/ 提取学习系统数据：
+build_learn_data.py — 从 md/ 提取学习系统数据（含原文锚点）：
 
 输出（写入 gmzy-app/static/learn/ 与 gmzy-app/static/quiz/）：
   decks.json          记忆卡包总录
-  deck-<id>.json      记忆卡（front/back/meta）
-  quiz.json           各书复习思考题题库
+  deck-<id>.json      记忆卡（front/sub/back/meta{deck,book,g}）
+  index.json + <书>.json  各书复习思考题题库（chapter/q/g/book）
+
+锚点：book = catalog slug，g = 书籍内容块序号，可直接跳
+      /pages/reader/reader?slug=<book>&g=<g> 定位原文。
 
 卡片来源：
   deck-fangji.json  方剂卡（29方剂讲解：### 方名《出处》+〔组成〕〔讲解〕〔临证应用〕）
   deck-herb.json    中药卡（14本草备要讲解：#### 药名 +〔原文〕【讲解】【临证应用】）
-  deck-point.json   穴位卡（21针灸学系列：###### 穴名 +〔定位〕〔主治〕）
+  deck-point.json   穴位卡（21针灸学三册：###### 穴名 +〔定位〕〔主治〕）
   deck-koujue.json  口诀卡（7中药诊断方剂口诀：分节歌诀）
 """
 
@@ -22,6 +25,7 @@ import glob
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MD_DIR = os.path.join(ROOT, "md")
+DATA_DIR = os.path.join(ROOT, "gmzy-app", "static", "books-data")
 LEARN_DIR = os.path.join(ROOT, "gmzy-app", "static", "learn")
 QUIZ_DIR = os.path.join(ROOT, "gmzy-app", "static", "quiz")
 
@@ -65,9 +69,92 @@ def trunc(t, n):
     return t if len(t) <= n else t[: n - 1] + "…"
 
 
+# ---------------- 原文锚点 ----------------
+def norm(s):
+    return re.sub(r"\s+", "", re.sub(r"\*\*", "", s))
+
+
+def block_text(b):
+    if "x" in b:
+        return b["x"]
+    if "segs" in b:
+        return "".join(seg.get("x", "") for seg in b["segs"])
+    return ""
+
+
+class Anchor:
+    """把 md 块顺序映射到 books-data json 块序号（双向顺序一致，游标前进）。"""
+
+    def __init__(self, stem, slug):
+        self.stem = stem
+        self.slug = slug
+        with open(os.path.join(DATA_DIR, slug + ".json"), encoding="utf-8") as f:
+            self.blocks = json.load(f)["blocks"]
+        self.cursor = 0
+        self.miss = 0
+
+    def find(self, kind, md_text):
+        want = norm(md_text)
+        if not want:
+            return None
+        n = len(self.blocks)
+        for i in range(self.cursor, min(n, self.cursor + 3000)):
+            b = self.blocks[i]
+            if b.get("t") != kind:
+                continue
+            if norm(block_text(b)) == want:
+                self.cursor = i + 1
+                return i
+        self.miss += 1
+        return None
+
+
+_STEM2SLUG = None
+
+
+def stem2slug(stem):
+    global _STEM2SLUG
+    if _STEM2SLUG is None:
+        with open(os.path.join(DATA_DIR, "catalog.json"), encoding="utf-8") as f:
+            _STEM2SLUG = {b["stem"]: b["slug"] for b in json.load(f)}
+    return _STEM2SLUG.get(stem)
+
+
+# ---------------- 带标签段落收集（支持标签独占行 & 续段） ----------------
+def collect_parts(blks, start, wanted):
+    """扫一个节内的段落，返回 {label: body}；未到下一个标题为止。
+
+    规则：标签行的标签后文本为该 label 首段；若标签独占行则正文取后续段；
+    之后的无标签段落并入当前 label（换行拼接）。
+    """
+    parts = {}
+    cur = None
+    j = start
+    while j < len(blks) and blks[j][0] != "h":
+        txt = blks[j][2]
+        lab = label_of(txt)
+        if lab:
+            cur = lab if lab in wanted else None
+            if cur and not parts.get(cur):
+                body = re.sub(r"^\*\*(【[^】]{1,20}】|〔[^〕]{1,20}〕)\*\*\s*", "", txt).strip()
+                body = re.sub(r"\*\*", "", body)
+                parts[cur] = body
+            j += 1
+            continue
+        if cur and parts.get(cur) is not None:
+            body = re.sub(r"\*\*", "", txt).strip()
+            if body:
+                parts[cur] = (parts[cur] + "\n" + body).strip()
+        j += 1
+    return parts, j
+
+
 # ---------------- 方剂卡 ----------------
 def deck_fangji():
-    blks = blocks_of(read("29方剂讲解"))
+    stem = "29方剂讲解"
+    slug = stem2slug(stem)
+    anch = Anchor(stem, slug)
+    blks = blocks_of(read(stem))
     cards = []
     i = 0
     cur_cat = ""
@@ -78,44 +165,38 @@ def deck_fangji():
         if kind == "h" and lv == 3 and re.search(r"《[^》]+》", t):
             name = re.sub(r"《[^》]+》.*$", "", t).strip()
             src = (re.search(r"《([^》]+)》", t) or [None, ""])[1]
-            comp = jiang = lin = ""
-            j = i + 1
-            while j < len(blks) and blks[j][0] != "h":
-                txt = blks[j][2]
-                lab = label_of(txt)
-                body = plain(txt)
-                if lab == "〔组成〕" and not comp:
-                    comp = body
-                elif lab == "〔讲解〕" and not jiang:
-                    jiang = body
-                elif lab == "〔临证应用〕" and not lin:
-                    lin = body
-                j += 1
+            parts, j = collect_parts(blks, i + 1, ("〔组成〕", "〔讲解〕", "〔临证应用〕"))
+            comp, jiang, lin = parts.get("〔组成〕"), parts.get("〔讲解〕", ""), parts.get("〔临证应用〕", "")
             if comp:
                 zhu = ""
                 for cand in (jiang, lin):
+                    cand = cand.replace("\n", "")
                     m = re.search(r"(本方主治[^。；]*|具[^。]{0,40}效。?)[。；]?", cand)
                     if m:
                         zhu = m.group(0).rstrip("。；")
                         break
-                back = "〔组成〕" + trunc(comp, 110)
+                back = "〔组成〕" + trunc(comp.replace("\n", ""), 110)
                 if zhu:
                     back += "\n〔主治〕" + trunc(zhu, 60)
                 cards.append({
                     "front": name,
                     "sub": f"《{src}》" if src else cur_cat,
                     "back": back,
-                    "meta": {"deck": "fangji"}
+                    "meta": {"deck": "fangji", "book": slug, "g": anch.find("h", t)}
                 })
             i = j
             continue
         i += 1
+    print(f"  [锚点miss:{anch.miss}]", end=" ")
     return cards
 
 
 # ---------------- 中药卡 ----------------
 def deck_herb():
-    blks = blocks_of(read("14本草备要讲解"))
+    stem = "14本草备要讲解"
+    slug = stem2slug(stem)
+    anch = Anchor(stem, slug)
+    blks = blocks_of(read(stem))
     cards = []
     cur_ch = cur_sec = ""
     i = 0
@@ -130,37 +211,33 @@ def deck_herb():
             if not name or len(name) > 8 or re.search(r"[第章节\s]", name):
                 i += 1
                 continue
-            yuan = jiang = lin = ""
-            j = i + 1
-            seen = 0
-            while j < len(blks) and blks[j][0] != "h":
-                txt = blks[j][2]
-                lab = label_of(txt)
-                body = plain(txt)
-                if lab == "〔原文〕" and not yuan:
-                    yuan = body.split("。")[0] + "。"
-                elif lab in ("【讲解】", "〔讲解〕") and not jiang:
-                    jiang = body
-                elif lab == "【临证应用】" and not lin:
-                    lin = body
-                j += 1
-            parts = []
+            parts, j = collect_parts(blks, i + 1, ("〔原文〕", "【讲解】", "〔讲解〕", "【临证应用】"))
+            yuan = parts.get("〔原文〕", "")
+            jiang = parts.get("【讲解】") or parts.get("〔讲解〕", "")
+            lin = parts.get("【临证应用】", "")
+            body = []
             if yuan:
-                parts.append("〔性味原文〕" + trunc(yuan, 60))
+                body.append("〔性味原文〕" + trunc(yuan.replace("\n", "").split("。")[0] + "。", 60))
             if jiang:
-                parts.append(trunc(jiang, 110))
+                # 讲解=脚注+正文的，跳到正文首句起
+                jiang_clean = jiang.replace("\n", "")
+                m = re.split(r"(?<=。)(?=[\u4e00-\u9fff])", jiang_clean)
+                if len(m) >= 2 and (m[0].startswith("（") or len(m[0]) < 16):
+                    jiang_clean = "".join(m[1:])
+                body.append(trunc(jiang_clean, 200))
             elif lin:
-                parts.append(trunc(lin, 110))
-            if parts:
+                body.append(trunc(lin.replace("\n", ""), 200))
+            if body:
                 cards.append({
                     "front": name,
                     "sub": cur_sec.replace("节", "节·") if cur_sec else cur_ch,
-                    "back": "\n".join(parts),
-                    "meta": {"deck": "herb"}
+                    "back": "\n".join(body),
+                    "meta": {"deck": "herb", "book": slug, "g": anch.find("h", t)}
                 })
             i = j
             continue
         i += 1
+    print(f"  [锚点miss:{anch.miss}]", end=" ")
     return cards
 
 
@@ -168,6 +245,8 @@ def deck_herb():
 def deck_point():
     cards = []
     for stem in ["21针灸学-上", "21针灸学-中", "21针灸学-下"]:
+        slug = stem2slug(stem)
+        anch = Anchor(stem, slug)
         blks = blocks_of(read(stem))
         cur_mer = ""
         i = 0
@@ -180,33 +259,29 @@ def deck_point():
                 if not name or len(name) > 6 or re.search(r"[第章节、\d]", name):
                     i += 1
                     continue
-                loc = zhu = ""
-                j = i + 1
-                while j < len(blks) and not (blks[j][0] == "h" and blks[j][1] >= 5):
-                    txt = blks[j][2]
-                    lab = label_of(txt)
-                    body = plain(txt)
-                    if lab == "〔定位〕" and not loc:
-                        loc = re.sub(r"（图[^）]*）", "", body)
-                    elif lab == "〔主治〕" and not zhu:
-                        zhu = body
-                    j += 1
+                parts, j = collect_parts(blks, i + 1, ("〔定位〕", "〔主治〕"))
+                loc, zhu = parts.get("〔定位〕"), parts.get("〔主治〕")
                 if loc and zhu:
+                    loc = re.sub(r"（图[^）]*）", "", loc).replace("\n", "")
                     cards.append({
                         "front": name,
                         "sub": cur_mer,
-                        "back": "〔定位〕" + trunc(loc, 70) + "\n〔主治〕" + trunc(zhu, 70),
-                        "meta": {"deck": "point"}
+                        "back": "〔定位〕" + trunc(loc, 70) + "\n〔主治〕" + trunc(zhu.replace("\n", ""), 70),
+                        "meta": {"deck": "point", "book": slug, "g": anch.find("h", t)}
                     })
                     i = j
                     continue
             i += 1
+        print(f"{stem.split('-')[1]}[miss:{anch.miss}]", end=" ")
     return cards
 
 
 # ---------------- 口诀卡 ----------------
 def deck_koujue():
-    blks = blocks_of(read("7中药诊断方剂口诀"))
+    stem = "7中药诊断方剂口诀"
+    slug = stem2slug(stem)
+    anch = Anchor(stem, slug)
+    blks = blocks_of(read(stem))
     cards = []
     cur1 = cur2 = last_short = ""
     mnum = re.compile(r"^\d{1,2}[.．、]")
@@ -222,7 +297,7 @@ def deck_koujue():
             cur2 = t
         elif kind == "p" and not mnum.match(t) and short_sec.match(plain(t)) \
                 and not label_of(t):
-            last_short = plain(t)  # 候选小节名（如“望诊”）
+            last_short = plain(t)  # 候选小节名（如"望诊"）
         elif kind == "p" and mnum.match(t):
             sec = cur2 or last_short or cur1
             if not sec:
@@ -237,75 +312,95 @@ def deck_koujue():
                 "front": sec,
                 "sub": f"{cur1}·第{len([c for c in cards if c['front']==sec])+1}诀",
                 "back": "\n".join(plain(v) for v in verses),
-                "meta": {"deck": "koujue"}
+                "meta": {"deck": "koujue", "book": slug, "g": anch.find("p", t)}
             })
             i = j
             continue
         i += 1
+    print(f"  [锚点miss:{anch.miss}]", end=" ")
     return cards
 
 
 # ---------------- 复习思考题 ----------------
-QUIZ_HEAD_RE = re.compile(r"^(附：)?复习思考题[：:]?$|^思考题$")
+QUIZ_MARK_RE = re.compile(r"^(附：)?复习思考题[：:]?$|^思考题$")
+WEAK_RE = re.compile(r"小结|思考题|复习|学习|方法|目的|要求|学时|目录|前言|序言|凡例|编写|出版|版权|说明|附录|索引|编者|提要|自序")
+
+
+def weak(title):
+    return bool(WEAK_RE.search(title))
+
+
+def chapter_of(lvl_map):
+    for lv in (2, 3, 4, 5, 6):
+        if lvl_map.get(lv):
+            return lvl_map[lv]
+    return ""
+
+
+def collect_q(lines, start, lvl_map, anch, anchor_kind, anchor_text):
+    """从 start 行起收集编号题。返回 (items, end)。"""
+    items = []
+    g = anch.find(anchor_kind, anchor_text) if anch else None
+    chapter = chapter_of(lvl_map)
+    j = start
+    phase = 0  # 0 找题 1 续题
+    while j < len(lines):
+        s = lines[j].strip()
+        if not s:
+            j += 1
+            continue
+        if HEAD_RE.match(s):
+            break
+        if phase == 0 and not re.match(r"^(\(?\d{1,2}\)|\d{1,2}[．.、)]|\(\d{1,2}\)|[一二三四五六七八九十][.．、])", s):
+            # 跳过"复习思考题"后还可能有非编号引言行
+            if len(items) == 0 and not QUIZ_MARK_RE.match(s):
+                j += 1
+                continue
+        m = re.match(r"^(?:\(?\d{1,2}\)|\d{1,2}[．.、)]|\(\d{1,2}\))\s*(.+)", s)
+        if m and len(m.group(1).strip()) >= 4:
+            phase = 1
+            q = m.group(1).strip()
+            if not re.search(r"学时|(目的要求)", q):
+                items.append({"chapter": chapter, "q": q, "g": g})
+            j += 1
+            continue
+        if phase == 1 and items and not re.match(r"^[一二三四五六七八九十]、", s) \
+                and not items[-1]["q"].endswith(("？", "?", "。")) \
+                and not s.startswith("**"):
+            items[-1]["q"] += re.sub(r"\*\*", "", s)
+            j += 1
+            continue
+        break
+    return items, j
 
 
 def extract_quiz(stem):
+    slug = stem2slug(stem)
+    anch = Anchor(stem, slug) if slug else None
     lines = read(stem).split("\n")
     items = []
-    cur_ch = ""
+    lvl_map = {}
     i = 0
     while i < len(lines):
         s = lines[i].strip()
         mh = HEAD_RE.match(s)
         if mh:
+            lv = len(mh.group(1))
             title = mh.group(2).strip()
-            if QUIZ_HEAD_RE.match(title) or "复习思考题" in title:
-                # 收集随后编号题目
-                j = i + 1
-                while j < len(lines):
-                    l2 = lines[j].strip()
-                    if not l2:
-                        j += 1
-                        continue
-                    if HEAD_RE.match(l2):
-                        break
-                    m = re.match(r"^(\(?\d{1,2}\)|\d{1,2}[．.、)]|\(\d{1,2}\))\s*(.+)", l2)
-                    if m and len(m.group(2).strip()) >= 4:
-                        q = m.group(2).strip()
-                        if not re.search(r"学时|(目的要求)", q):
-                            items.append({"chapter": cur_ch, "q": q})
-                        j += 1
-                        continue
-                    if items and not m and len(l2) > 0 and not re.match(r"^[一二三四五六七八九十]、", l2) \
-                            and not items[-1]["q"].endswith(("？", "?", "。")) \
-                            and not l2.startswith("**"):
-                        items[-1]["q"] += l2
-                        j += 1
-                        continue
-                    break
+            if QUIZ_MARK_RE.match(title) or (("复习思考题" in title) and len(title) <= 14):
+                qs, j = collect_q(lines, i + 1, lvl_map, anch, "h", title)
+                items += qs
                 i = j
                 continue
-            else:
-                cur_ch = title
-                i += 1
-                continue
-        if QUIZ_HEAD_RE.match(s):
-            j = i + 1
-            while j < len(lines):
-                l2 = lines[j].strip()
-                if not l2:
-                    j += 1
-                    continue
-                if HEAD_RE.match(l2):
-                    break
-                m = re.match(r"^(\(?\d{1,2}\)|\d{1,2}[．.、)]|\(\d{1,2}\))\s*(.+)", l2)
-                if m and len(m.group(2).strip()) >= 4:
-                    q = m.group(2).strip()
-                    if not re.search(r"学时|(目的要求)", q):
-                        items.append({"chapter": cur_ch, "q": q})
-                    j += 1
-                    continue
-                break
+            if not weak(title):
+                lvl_map[lv] = title
+                for k in [k for k in lvl_map if k > lv]:
+                    del lvl_map[k]
+            i += 1
+            continue
+        if QUIZ_MARK_RE.match(s):
+            qs, j = collect_q(lines, i + 1, lvl_map, anch, "p", s)
+            items += qs
             i = j
             continue
         i += 1
@@ -318,10 +413,13 @@ def extract_quiz(stem):
             continue
         seen.add(q)
         it["q"] = q
+        it["book"] = slug
         out.append(it)
-    return out
+    print(f"[quiz] {stem}: {len(out)} 题  [锚点miss:{anch.miss if anch else '-'}]")
+    return slug, out
 
 
+# ---------------- 主流程 ----------------
 def main():
     os.makedirs(LEARN_DIR, exist_ok=True)
     os.makedirs(QUIZ_DIR, exist_ok=True)
@@ -345,19 +443,23 @@ def main():
 
     all_quiz = []
     total_q = 0
+    # 先清掉旧产物（文件名以 q<N>.json 定名，ASCII 兼容全平台路径）
+    for old in glob.glob(os.path.join(QUIZ_DIR, "*.json")):
+        os.remove(old)
+    qidx = 0
     for md_path in sorted(glob.glob(os.path.join(MD_DIR, "*.md"))):
         stem = os.path.splitext(os.path.basename(md_path))[0]
-        qs = extract_quiz(stem)
-        if len(qs) >= 5:
-            all_quiz.append({"slug": re.match(r"^(\d+)", stem).group(1)
-                             if re.match(r"^(\d+)", stem) else stem,
+        slug, qs = extract_quiz(stem)
+        if len(qs) >= 5 and slug:
+            fname = f"q{qidx}.json"
+            qidx += 1
+            all_quiz.append({"slug": slug,
                              "book": re.sub(r"^\d+", "", stem),
+                             "f": fname,
                              "count": len(qs)})
             total_q += len(qs)
-            with open(os.path.join(QUIZ_DIR, f"{stem}.json"), "w", encoding="utf-8") as f:
+            with open(os.path.join(QUIZ_DIR, fname), "w", encoding="utf-8") as f:
                 json.dump(qs, f, ensure_ascii=False, separators=(",", ":"))
-        if qs:
-            print(f"[quiz] {stem}: {len(qs)} 题")
     with open(os.path.join(QUIZ_DIR, "index.json"), "w", encoding="utf-8") as f:
         json.dump(all_quiz, f, ensure_ascii=False, separators=(",", ":"))
     print(f"[ok] 题库共 {total_q} 题，{len(all_quiz)} 本")

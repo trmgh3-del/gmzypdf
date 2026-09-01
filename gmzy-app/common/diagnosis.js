@@ -55,5 +55,13 @@ export function diagnose(selectedIds, rules, limit = 4) {
     .slice(0, limit)
 }
 
-const Diagnosis = { symptomIndex, scoreOne, diagnose }
+// 查找两个证型之间的鉴别要点（rules.vs 人工编写，顺序无关）
+export function findVs(rules, idA, idB) {
+    for (const v of rules.vs || []) {
+        if ((v.a === idA && v.b === idB) || (v.a === idB && v.b === idA)) return v
+    }
+    return null
+}
+
+const Diagnosis = { symptomIndex, scoreOne, diagnose, findVs }
 export default Diagnosis

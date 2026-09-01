@@ -1,5 +1,5 @@
 <template>
-    <view class="shelf">
+    <view class="shelf" :class="{ night }">
         <!-- 顶部横幅 -->
         <view class="hero">
             <view class="hero-inner">
@@ -92,6 +92,7 @@ import { computed, onMounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { loadCatalog, CATEGORIES, booksOf } from '../../common/books.js'
 import { store, pending } from '../../common/store.js'
+import { applyNavTheme } from '../../common/theme.js'
 import { formatChars, formatTime } from '../../common/util.js'
 import BookCover from '../../components/BookCover.vue'
 
@@ -111,8 +112,10 @@ onMounted(async () => {
 })
 
 const showTick = ref(0)
+const night = computed(() => (showTick.value, store.settings.night))
 onShow(() => {
     showTick.value++
+    applyNavTheme()
 })
 
 const books = computed(() => {

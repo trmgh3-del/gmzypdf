@@ -1,5 +1,5 @@
 <template>
-    <view class="diag">
+    <view class="diag" :class="{ night }">
         <!-- 免责声明常驻 -->
         <view class="notice">
             <text class="notice-icon">⚠</text>
@@ -97,6 +97,16 @@
                 </view>
             </view>
 
+            <!-- 相近证型鉴别 -->
+            <view v-if="compare" class="vs-card">
+                <view class="vs-head">
+                    <text class="vs-tag serif-font">鉴别</text>
+                    <text class="vs-names">{{ compare.nameA }} ＆ {{ compare.nameB }}</text>
+                </view>
+                <text class="vs-text">{{ compare.text }}</text>
+                <text class="vs-ref">{{ compare.refs }}</text>
+            </view>
+
             <view class="notice foot-notice">
                 <text class="notice-icon">⚠</text>
                 <text class="notice-text">{{ rules.disclaimer || DEFAULT_DISCLAIMER }}</text>
@@ -124,8 +134,9 @@
 import { ref, reactive, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { loadDiagRules } from '../../common/learn.js'
-import { diagnose, symptomIndex } from '../../common/diagnosis.js'
+import { diagnose, symptomIndex, findVs } from '../../common/diagnosis.js'
 import { store, pending, pushDiagRecord, clearDiagHistory } from '../../common/store.js'
+import { applyNavTheme } from '../../common/theme.js'
 
 const DEFAULT_DISCLAIMER = '本功能仅供学习辨证思路参考，不能替代执业医师面诊，如有不适请及时就医。'
 
@@ -134,7 +145,9 @@ const selected = reactive({})
 const openGroups = reactive({})
 const step = ref('pick')
 const results = ref([])
+const compare = ref(null)
 const history = computed(() => store.learn.diagHistory)
+const night = ref(false)
 let idxMap = {}
 
 onLoad(async () => {
@@ -146,6 +159,7 @@ onLoad(async () => {
 })
 
 onShow(() => {
+    night.value = applyNavTheme()
     if (pending.diagSymptoms) {
         for (const id of pending.diagSymptoms) selected[id] = true
         pending.diagSymptoms = null
@@ -175,6 +189,12 @@ function run() {
     const out = diagnose(Object.keys(selected), rules.value, 4)
     results.value = out.map((r) => reactive({ ...r, _open: false }))
     if (results.value.length) results.value[0]._open = true
+    // 前两名接近（分差<15%）且有人工鉴别要点时，给出鉴别提示
+    compare.value = null
+    if (out.length >= 2 && out[0].pct - out[1].pct < 15) {
+        const v = findVs(rules.value, out[0].id, out[1].id)
+        if (v) compare.value = { text: v.text, refs: v.refs || '', nameA: out[0].name, nameB: out[1].name }
+    }
     step.value = 'result'
     if (out.length) {
         const labels = Object.keys(selected).map((id) => idxMap[id] || id)
@@ -541,6 +561,48 @@ function fmt(ts) {
 
 .foot-notice {
     margin-top: 26rpx;
+}
+
+.vs-card {
+    background: linear-gradient(160deg, #6b2a20, #451611);
+    border-radius: 20rpx;
+    padding: 28rpx 26rpx;
+    margin-bottom: 20rpx;
+}
+
+.vs-head {
+    display: flex;
+    align-items: center;
+    gap: 16rpx;
+    margin-bottom: 14rpx;
+}
+
+.vs-tag {
+    background: rgba(243, 233, 210, 0.18);
+    color: #f3e9d2;
+    font-size: 22rpx;
+    border-radius: 8rpx;
+    padding: 4rpx 14rpx;
+}
+
+.vs-names {
+    color: #f3e9d2;
+    font-size: 26rpx;
+    font-weight: 600;
+}
+
+.vs-text {
+    display: block;
+    color: rgba(243, 233, 210, 0.9);
+    font-size: 25rpx;
+    line-height: 1.8;
+}
+
+.vs-ref {
+    display: block;
+    margin-top: 12rpx;
+    color: rgba(243, 233, 210, 0.5);
+    font-size: 21rpx;
 }
 
 .sec {

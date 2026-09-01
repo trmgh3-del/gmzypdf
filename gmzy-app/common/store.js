@@ -9,8 +9,9 @@ const defaults = {
     settings: {
         fontSize: 19,        // px
         lineHeight: 1.8,
-        theme: 'paper',      // paper | night | eye
-        serif: true
+        theme: 'paper',      // paper | night | eye（阅读器内）
+        serif: true,
+        night: false         // 全局夜间模式
     },
     // 每本书的阅读进度: { slug: { chIdx, scrollTop, gIdx, percent, ts } }
     progress: {},
@@ -126,28 +127,85 @@ function bumpActivity(kind) {
     a[kind] = (a[kind] || 0) + 1
 }
 
-// ---- 记忆卡掌握度 ----
+// ---- 记忆卡（SM-2 间隔重复） ----
+// 卡片状态: { lv: 1|2|3, n: 连续答对次数, ef: 难度因子, ivl: 间隔天数, next: 到期时间戳 }
+// lv 1=不认识 2=模糊 3=已掌握；旧版本存数字时按 lv 懒迁移。
+function cardState(deckId, cardIdx) {
+    const k = deckId + '_' + cardIdx
+    let v = store.learn.cardMastery[k]
+    if (typeof v === 'number') {
+        v = { lv: v, n: 0, ef: 2.5, ivl: 0, next: Date.now() }
+        store.learn.cardMastery[k] = v
+    }
+    return v || null
+}
+
+const DAY = 86400000
+
 export function setCardMastery(deckId, cardIdx, level) {
-    store.learn.cardMastery[deckId + '_' + cardIdx] = level
+    const k = deckId + '_' + cardIdx
+    const prev = cardState(deckId, cardIdx) || { lv: 0, n: 0, ef: 2.5, ivl: 0, next: 0 }
+    const q = level === 3 ? 5 : level === 2 ? 3 : 1
+    let { n, ef, ivl } = prev
+    const now = Date.now()
+    if (q < 3) {
+        n = 0
+        ivl = 0
+        // 不认识：30 分钟后重现；当天仍计入到期
+        const next = level === 1 ? now + 30 * 60000 : now + DAY
+        ef = Math.max(1.3, ef - 0.2)
+        store.learn.cardMastery[k] = { lv: level, n, ef, ivl, next }
+    } else {
+        n += 1
+        ivl = n === 1 ? 1 : n === 2 ? 3 : Math.max(4, Math.round(ivl * ef))
+        ef = Math.max(1.3, ef + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02)))
+        store.learn.cardMastery[k] = { lv: level, n, ef, ivl, next: now + ivl * DAY }
+    }
     bumpActivity('cards')
 }
 
 export function cardMasteryOf(deckId, cardIdx) {
-    return store.learn.cardMastery[deckId + '_' + cardIdx] || 0
+    const s = cardState(deckId, cardIdx)
+    return s ? s.lv : 0
 }
 
-// 卡包统计: 返回 { mastered, fuzzy, unknown, done }
+// 取完整卡片状态（到期时间、连续答对等），页面展示用
+export function cardStateRef(deckId, cardIdx) {
+    return cardState(deckId, cardIdx)
+}
+
+// 到期（含新卡 neverDue=false 时只看已学）
+export function isCardDue(deckId, cardIdx, now = Date.now()) {
+    const s = cardState(deckId, cardIdx)
+    return !!s && s.next <= now
+}
+
+// 卡包统计: { mastered, fuzzy, unknown, done, due }
 export function deckStats(deckId, total) {
-    const m = store.learn.cardMastery
-    const s = { mastered: 0, fuzzy: 0, unknown: 0, done: 0 }
+    const now = Date.now()
+    const s = { mastered: 0, fuzzy: 0, unknown: 0, done: 0, due: 0 }
     for (let i = 0; i < total; i++) {
-        const v = m[deckId + '_' + i]
-        if (v === 3) s.mastered++
-        else if (v === 2) s.fuzzy++
-        else if (v === 1) s.unknown++
-        if (v) s.done++
+        const st = cardState(deckId, i)
+        if (!st) continue
+        s.done++
+        if (st.lv === 3) s.mastered++
+        else if (st.lv === 2) s.fuzzy++
+        else if (st.lv === 1) s.unknown++
+        if (st.next <= now) s.due++
     }
     return s
+}
+
+// 到期卡片索引（先到期先排，其次按 lv 升序——不认识的排前）
+export function dueCardIds(deckId, total) {
+    const now = Date.now()
+    const arr = []
+    for (let i = 0; i < total; i++) {
+        const st = cardState(deckId, i)
+        if (st && st.next <= now) arr.push([i, st])
+    }
+    arr.sort((a, b) => a[1].lv - b[1].lv || a[1].next - b[1].next)
+    return arr.map((x) => x[0])
 }
 
 export function resetDeck(deckId, total) {
@@ -199,10 +257,62 @@ export function learnOverview() {
         cards += act[d].cards || 0
         quiz += act[d].quiz || 0
     }
+    const t = todayStr()
+    const today = act[t] || { cards: 0, quiz: 0 }
     return {
         cards,
         quiz,
         activeDays: days.length,
-        diagCount: store.learn.diagHistory.length
+        diagCount: store.learn.diagHistory.length,
+        todayCards: today.cards || 0,
+        todayQuiz: today.quiz || 0,
+        streak: streakDays()
     }
+}
+
+export function streakDays() {
+    const act = store.learn.activity || {}
+    let cur = new Date()
+    // 今天还没学：允许从昨天起算
+    const pad = (n) => String(n).padStart(2, '0')
+    const key = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+    let streak = 0
+    if (!act[key(cur)]) cur = new Date(cur.getTime() - DAY)
+    while (act[key(cur)]) {
+        streak++
+        cur = new Date(cur.getTime() - DAY)
+    }
+    return streak
+}
+
+// 近 7 日学习量（含今天），用于柱状图
+export function weekSeries() {
+    const act = store.learn.activity || {}
+    const out = []
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date(Date.now() - i * DAY)
+        const p = (n) => String(n).padStart(2, '0')
+        const k = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+        const a = act[k] || {}
+        out.push({
+            day: i === 0 ? '今' : `${d.getMonth() + 1}/${d.getDate()}`,
+            cards: a.cards || 0,
+            quiz: a.quiz || 0
+        })
+    }
+    return out
+}
+
+// 全部卡包到期总数
+export function totalDue(decks) {
+    return decks.reduce((s, d) => s + deckStats(d.id, d.count).due, 0)
+}
+
+// ---- 全局外观 ----
+export function setNight(on) {
+    store.settings.night = !!on
+}
+
+export function isNight() {
+    return !!store.settings.night
 }

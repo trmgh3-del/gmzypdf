@@ -1,27 +1,41 @@
 <template>
-    <view class="learn">
+    <view class="learn" :class="{ night }">
         <!-- 学习总览 -->
         <view class="hero">
             <view class="hero-row">
                 <view class="hero-cell">
-                    <text class="hero-num serif-font">{{ ov.cards }}</text>
-                    <text class="hero-label">识记卡片</text>
+                    <text class="hero-num serif-font">{{ ov.streak }}</text>
+                    <text class="hero-label">连续学习(天)</text>
                 </view>
                 <view class="hero-div" />
                 <view class="hero-cell">
-                    <text class="hero-num serif-font">{{ ov.quiz }}</text>
-                    <text class="hero-label">自测题目</text>
+                    <text class="hero-num serif-font">{{ dueTotal }}</text>
+                    <text class="hero-label">今日待复习</text>
                 </view>
                 <view class="hero-div" />
                 <view class="hero-cell">
-                    <text class="hero-num serif-font">{{ ov.activeDays }}</text>
-                    <text class="hero-label">学习天数</text>
+                    <text class="hero-num serif-font">{{ ov.todayCards + ov.todayQuiz }}</text>
+                    <text class="hero-label">今日已学</text>
                 </view>
                 <view class="hero-div" />
                 <view class="hero-cell">
-                    <text class="hero-num serif-font">{{ ov.diagCount }}</text>
-                    <text class="hero-label">辨证练习</text>
+                    <text class="hero-num serif-font">{{ ov.cards + ov.quiz }}</text>
+                    <text class="hero-label">累计学习量</text>
                 </view>
+            </view>
+            <!-- 近 7 日学习量 -->
+            <view class="week">
+                <view v-for="d in week" :key="d.day" class="week-col">
+                    <view class="week-bars">
+                        <view class="week-bar c" :style="{ height: barH(d.cards) }" />
+                        <view class="week-bar q" :style="{ height: barH(d.quiz) }" />
+                    </view>
+                    <text class="week-day">{{ d.day }}</text>
+                </view>
+            </view>
+            <view class="week-legend">
+                <text class="lg"><text class="dot c" />识记卡片</text>
+                <text class="lg"><text class="dot q" />自测题目</text>
             </view>
         </view>
 
@@ -33,7 +47,10 @@
                 <view class="deck-info">
                     <view class="deck-top">
                         <text class="deck-name">{{ d.name }}</text>
-                        <text class="deck-count serif-font">{{ d.count }} 张</text>
+                        <view class="deck-topside">
+                            <text v-if="statOf(d).due" class="due-badge serif-font">{{ statOf(d).due }} 到期</text>
+                            <text class="deck-count serif-font">{{ d.count }} 张</text>
+                        </view>
                     </view>
                     <text class="deck-desc">{{ d.desc }}</text>
                     <view class="deck-bar">
@@ -70,21 +87,28 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { onShow, onLoad } from '@dcloudio/uni-app'
 import { loadDecks, loadQuizIndex, quizKey } from '../../common/learn.js'
 import {
     deckStats,
     quizStatsOf,
-    learnOverview
+    learnOverview,
+    weekSeries
 } from '../../common/store.js'
+import { applyNavTheme } from '../../common/theme.js'
 
 const decks = ref([])
 const quizBooks = ref([])
 const stats = reactive({})
 const qstats = reactive({})
-const ov = reactive({ cards: 0, quiz: 0, activeDays: 0, diagCount: 0 })
+const ov = reactive({ cards: 0, quiz: 0, activeDays: 0, diagCount: 0, todayCards: 0, todayQuiz: 0, streak: 0 })
+const week = ref([])
+const night = ref(false)
 const totalQuiz = ref(0)
+
+const dueTotal = computed(() => decks.value.reduce((s, d) => s + (statOf(d).due || 0), 0))
+const weekMax = computed(() => Math.max(8, ...week.value.map((d) => d.cards + d.quiz)))
 
 onLoad(() => {
     loadDecks().then((list) => {
@@ -99,10 +123,16 @@ onLoad(() => {
 })
 
 onShow(() => {
+    night.value = applyNavTheme()
     Object.assign(ov, learnOverview())
+    week.value = weekSeries()
     refreshDeckStats()
     refreshQuizStats()
 })
+
+function barH(v) {
+    return Math.round((v / weekMax.value) * 110) + 'rpx'
+}
 
 function refreshDeckStats() {
     for (const d of decks.value) stats[d.id] = deckStats(d.id, d.count)
@@ -113,7 +143,7 @@ function refreshQuizStats() {
 }
 
 function statOf(d) {
-    return stats[d.id] || { mastered: 0, fuzzy: 0, unknown: 0, done: 0 }
+    return stats[d.id] || { mastered: 0, fuzzy: 0, unknown: 0, done: 0, due: 0 }
 }
 
 function qstat(b) {
@@ -131,7 +161,8 @@ function qpct(b) {
 }
 
 function openDeck(d) {
-    uni.navigateTo({ url: '/pages/cards/cards?deck=' + d.id })
+    const due = statOf(d).due
+    uni.navigateTo({ url: '/pages/cards/cards?deck=' + d.id + (due ? '&due=1' : '') })
 }
 
 function openQuiz(b) {
@@ -149,7 +180,7 @@ function openQuiz(b) {
 .hero {
     background: linear-gradient(160deg, #6b2a20, #451611);
     border-radius: 22rpx;
-    padding: 34rpx 12rpx;
+    padding: 34rpx 12rpx 24rpx;
     margin-bottom: 28rpx;
 }
 
@@ -173,7 +204,7 @@ function openQuiz(b) {
 }
 
 .hero-label {
-    font-size: 22rpx;
+    font-size: 21rpx;
     color: rgba(243, 233, 210, 0.6);
 }
 
@@ -183,11 +214,72 @@ function openQuiz(b) {
     background: rgba(243, 233, 210, 0.25);
 }
 
+.week {
+    display: flex;
+    justify-content: space-around;
+    margin-top: 30rpx;
+    padding: 0 10rpx;
+}
+
+.week-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8rpx;
+}
+
+.week-bars {
+    height: 120rpx;
+    display: flex;
+    align-items: flex-end;
+    gap: 6rpx;
+}
+
+.week-bar {
+    width: 12rpx;
+    border-radius: 4rpx;
+    min-height: 4rpx;
+
+    &.c { background: rgba(243, 233, 210, 0.9); }
+    &.q { background: #c8932f; }
+}
+
+.week-day {
+    font-size: 19rpx;
+    color: rgba(243, 233, 210, 0.55);
+}
+
+.week-legend {
+    display: flex;
+    justify-content: center;
+    gap: 30rpx;
+    margin-top: 14rpx;
+}
+
+.lg {
+    font-size: 19rpx;
+    color: rgba(243, 233, 210, 0.55);
+    display: flex;
+    align-items: center;
+    gap: 8rpx;
+}
+
+.dot {
+    display: inline-block;
+    width: 14rpx;
+    height: 14rpx;
+    border-radius: 4rpx;
+
+    &.c { background: rgba(243, 233, 210, 0.9); }
+    &.q { background: #c8932f; }
+}
+
 .sec {
     background: #fffdf7;
     border-radius: 22rpx;
     padding: 26rpx 24rpx;
     margin-bottom: 28rpx;
+    border: 1rpx solid #e4dcc8;
 }
 
 .sec-head {
@@ -244,13 +336,27 @@ function openQuiz(b) {
 .deck-top {
     display: flex;
     justify-content: space-between;
-    align-items: baseline;
+    align-items: center;
 }
 
 .deck-name {
     font-size: 30rpx;
     font-weight: 600;
     color: #37332b;
+}
+
+.deck-topside {
+    display: flex;
+    align-items: center;
+    gap: 12rpx;
+}
+
+.due-badge {
+    font-size: 20rpx;
+    background: #8b3a3a;
+    color: #f3e9d2;
+    border-radius: 999rpx;
+    padding: 4rpx 16rpx;
 }
 
 .deck-count {

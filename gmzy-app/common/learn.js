@@ -59,11 +59,11 @@ export function loadQuizIndex() {
 }
 
 export function quizKey(item) {
-    return item.slug + item.book
+    return item.f // q<N>.json，唯一且全平台 ASCII 安全
 }
 
 export function loadQuizBook(key) {
-    return cached(`static/quiz/${encodeURIComponent(key)}.json`)
+    return cached(`static/quiz/${key}`)
 }
 
 // ---- 辨证规则 ----

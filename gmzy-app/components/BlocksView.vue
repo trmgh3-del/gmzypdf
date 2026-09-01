@@ -6,7 +6,8 @@
             :id="'blk-' + b.g"
             :data-g="b.g"
             class="blk"
-            :class="blockClass(b)"
+            :class="[blockClass(b), { 'blk-dict': dictMode && (b.t === 'p' || b.t === 'h') }]"
+            @tap="onBlkTap(b, $event)"
         >
             <!-- 标题 -->
             <view v-if="b.t === 'h'" class="hd-wrap">
@@ -52,10 +53,18 @@
 <script setup>
 const props = defineProps({
     blocks: { type: Array, default: () => [] }, // 每块带 g 全局序号
-    slug: { type: String, default: '' }
+    slug: { type: String, default: '' },
+    dictMode: { type: Boolean, default: false } // 查词模式：点段落触发 blk 事件
 })
 
-defineEmits(['img'])
+const emit = defineEmits(['img', 'blk'])
+
+function onBlkTap(b, e) {
+    if (!props.dictMode) return
+    if (b.t !== 'p' && b.t !== 'h') return
+    e && e.stopPropagation && e.stopPropagation()
+    emit('blk', b)
+}
 
 function blockClass(b) {
     if (b.t === 'h') return 'blk-h lvl-' + b.l
@@ -175,5 +184,17 @@ function tableMinWidth(b) {
     font-weight: 700;
     color: var(--accent, #8b3a3a);
     background: var(--th-bg, rgba(139, 58, 58, 0.06));
+}
+
+/* 查词模式：可点块提示 */
+.blk-dict {
+    border-radius: 6rpx;
+    box-shadow: 0 0 0 1rpx var(--line, #e4dcc8) inset;
+    margin: 2rpx 0;
+}
+
+.blk-dict .para {
+    background: rgba(139, 58, 58, 0.045);
+    border-radius: 6rpx;
 }
 </style>

@@ -27,7 +27,13 @@
         >
             <view class="content-inner">
                 <template v-for="ci in renderedIdx" :key="ci">
-                    <BlocksView :blocks="chapterBlocks(ci)" :slug="slug" @img="previewImg" />
+                    <BlocksView
+                        :blocks="chapterBlocks(ci)"
+                        :slug="slug"
+                        :dict-mode="dictMode"
+                        @img="previewImg"
+                        @blk="onDictBlk"
+                    />
                     <view class="chapter-sep">
                         <text class="chapter-sep-t">{{ chapters[ci].title }}</text>
                     </view>
@@ -57,6 +63,7 @@
             <view class="foot-row2">
                 <text class="foot-meta">{{ chapters[visualChIdx] ? chapters[visualChIdx].title : '' }}</text>
                 <text class="foot-meta">{{ percentText }}</text>
+                <view class="foot-act" :class="{ 'act-on': dictMode }" @tap="toggleDict">{{ dictMode ? '查词中…' : '查词' }}</view>
                 <view class="foot-act" @tap="bookmarkHere">＋书签</view>
                 <view class="foot-act" @tap="showSettings = true">设置</view>
             </view>
@@ -69,6 +76,7 @@
             @jump="jumpToG"
         />
         <SettingsPanel v-model:show="showSettings" />
+        <DictSheet :show="dictOpen" :terms="dictTerms" :snippet="dictSnippet" @close="dictOpen = false" />
 
         <view class="toast" v-if="toast">{{ toast }}</view>
     </view>
@@ -88,6 +96,8 @@ import {
 import BlocksView from '../../components/BlocksView.vue'
 import ChapterDrawer from '../../components/ChapterDrawer.vue'
 import SettingsPanel from '../../components/SettingsPanel.vue'
+import DictSheet from '../../components/DictSheet.vue'
+import { findTerms } from '../../common/termdict.js'
 
 const THEMES = {
     paper: { bg: '#f6f1e5', fg: '#37332b', muted: '#8d8371', card: '#fffdf7', line: '#e4dcc8', accent: '#8b3a3a', thBg: 'rgba(139,58,58,.06)' },
@@ -331,6 +341,32 @@ function goBack() {
     uni.navigateBack({ delta: 1 })
 }
 
+// ---- 查词 ----
+const dictMode = ref(false)
+const dictOpen = ref(false)
+const dictTerms = ref([])
+const dictSnippet = ref('')
+
+function toggleDict() {
+    dictMode.value = !dictMode.value
+    showToast(dictMode.value ? '查词模式：点按段落匹配卡片词条' : '已退出查词模式')
+}
+
+function blockFullText(b) {
+    if (b.t === 'h') return b.x || ''
+    if (b.t === 'p') return (b.segs || []).map((s) => s.x).join('')
+    return ''
+}
+
+async function onDictBlk(b) {
+    const text = blockFullText(b)
+    dictSnippet.value = text.length > 60 ? text.slice(0, 60) + '…' : text
+    const hits = await findTerms(text)
+    dictTerms.value = hits
+    dictOpen.value = true
+    if (!hits.length) showToast('本段未命中卡片词条')
+}
+
 function previewImg(b) {
     uni.previewImage({
         urls: [`/static/books/${slug.value}/${b.s}`]
@@ -541,6 +577,12 @@ onShareAppMessage(() => {
     font-size: 25rpx;
     color: var(--accent, #8b3a3a);
     padding: 6rpx 14rpx;
+}
+
+.foot-act.act-on {
+    background: var(--accent, #8b3a3a);
+    color: #f3e9d2;
+    border-radius: 999rpx;
 }
 
 .toast {

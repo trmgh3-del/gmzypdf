@@ -12,8 +12,9 @@
 - `tools/pdf_to_md.py` — PDF → Markdown 转换脚本
 - `tools/check_md.py` — 转换结果校验脚本（字数覆盖率、标题与图片链接检查）
 - `tools/build_app_data.py` — Markdown → App 数据包（`gmzy-app/static/`）编译脚本
-- `tools/build_learn_data.py` — 学习数据提取（记忆卡 1108 张 + 复习思考题 1958 题 →
-  `gmzy-app/static/learn/`、`gmzy-app/static/quiz/`）
+- `tools/build_learn_data.py` — 学习数据提取（记忆卡 1110 张 + 复习思考题 1974 题，
+  均带教材原文锚点 → `gmzy-app/static/learn/`、`gmzy-app/static/quiz/`）
+- `tools/validate_learn_data.py` — 学习/辨证数据完整性校验（锚点、数量、规则引用闭合）
 
 ## 转换特性
 

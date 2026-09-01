@@ -1,5 +1,5 @@
 <template>
-    <view class="mine">
+    <view class="mine" :class="{ night }">
         <!-- 统计卡 -->
         <view class="stats">
             <view class="stat">
@@ -70,14 +70,24 @@
 
         <!-- 关于 -->
         <view class="sec">
+            <view class="sec-head"><text class="sec-title">设置</text></view>
+            <view class="set-row" @tap="toggleNight">
+                <view class="set-info">
+                    <text class="set-name">夜间模式</text>
+                    <text class="set-desc">书架、学习、辨证、查询等界面整体转暗</text>
+                </view>
+                <switch :checked="night" color="#8b3a3a" @change="toggleNight" @tap.stop />
+            </view>
+        </view>
+        <view class="sec">
             <view class="sec-head"><text class="sec-title">关于</text></view>
             <view class="about">
                 <text class="about-title serif-font">光明中医文库·学习诊断系统</text>
                 <text class="about-line">收录光明中医函授教材 26 部，全文离线精排。</text>
-                <text class="about-line">内置记忆卡 1108 张、复习思考题 1958 题与中医辨证辅助。</text>
+                <text class="about-line">内置记忆卡 1110 张、复习思考题 1974 题与中医辨证辅助。</text>
                 <text class="about-line">辨证功能仅供学习参考，不能替代执业医师面诊。</text>
                 <text class="about-line">内容来源：光明中医网校（gmzy 系列教材电子化）。</text>
-                <text class="about-line">版本 v2.0.0 · 仅供学习研究使用</text>
+                <text class="about-line">版本 v2.1.0 · 仅供学习研究使用</text>
             </view>
         </view>
     </view>
@@ -86,14 +96,24 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { store, removeHistory, clearHistory, removeBookmark, clearBookmarks } from '../../common/store.js'
+import { store, removeHistory, clearHistory, removeBookmark, clearBookmarks, setNight } from '../../common/store.js'
+import { applyNavTheme } from '../../common/theme.js'
 import { formatTime } from '../../common/util.js'
 import BookCover from '../../components/BookCover.vue'
 
 const history = computed(() => store.history)
 const bookmarks = computed(() => store.bookmarks)
 const tick = ref(0)
-onShow(() => tick.value++)
+const night = computed(() => store.settings.night)
+onShow(() => {
+    tick.value++
+    applyNavTheme()
+})
+
+function toggleNight() {
+    setNight(!store.settings.night)
+    applyNavTheme()
+}
 
 const finishedCount = computed(() => {
     tick.value
@@ -360,5 +380,31 @@ function clearBm() {
     font-size: 24rpx;
     color: #6d6455;
     line-height: 1.7;
+}
+
+.set-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10rpx 0;
+    gap: 20rpx;
+}
+
+.set-info {
+    flex: 1;
+}
+
+.set-name {
+    display: block;
+    font-size: 28rpx;
+    color: #37332b;
+    font-weight: 600;
+    margin-bottom: 4rpx;
+}
+
+.set-desc {
+    display: block;
+    font-size: 22rpx;
+    color: #8d8371;
 }
 </style>

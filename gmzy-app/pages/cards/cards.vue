@@ -1,17 +1,19 @@
 <template>
-    <view class="cards">
+    <view class="cards" :class="{ night }" @touchstart="ts" @touchend="te">
         <view v-if="!ready" class="loading">卡片加载中…</view>
         <template v-else-if="!queue.length">
             <view class="done-all">
                 <text class="done-emoji serif-font">毕</text>
-                <text class="done-text">该筛选下没有卡片了</text>
-                <button class="btn ghost" @tap="resetFilter(false)">回到全部</button>
+                <text class="done-text">{{ dueMode ? '今日到期卡片已全部复习完，继续保持！' : '该筛选下没有卡片了' }}</text>
+                <button v-if="!dueMode" class="btn ghost" @tap="resetFilter('all')">回到全部</button>
+                <button v-else class="btn ghost" @tap="goNormal">进入顺序学习</button>
             </view>
         </template>
         <template v-else>
             <view class="topbar">
                 <text class="counter serif-font">{{ pos + 1 }} / {{ queue.length }}</text>
-                <view class="seg">
+                <view v-if="dueMode" class="due-tag serif-font">复习到期的 {{ queue.length }} 张</view>
+                <view v-else class="seg">
                     <text
                         v-for="f in FILTERS"
                         :key="f.key"
@@ -24,17 +26,19 @@
             </view>
 
             <view class="stage" @tap="flip">
-                <view class="card" :class="{ flipped, ['lv' + mastery] : !flipped }">
+                <view class="card" :class="{ flipped, ['lv' + mastery]: !flipped }">
                     <view class="face front">
                         <text class="card-sub">{{ cur.sub }}</text>
                         <text class="card-front serif-font">{{ cur.front }}</text>
-                        <text class="card-hint">点击卡片查看释义</text>
+                        <text v-if="dueInfo" class="card-due">{{ dueInfo }}</text>
+                        <text class="card-hint">点击卡片查看释义 · 左右滑动切换</text>
                     </view>
                     <view class="face back">
                         <text class="back-title serif-font">{{ cur.front }}</text>
                         <scroll-view scroll-y class="back-scroll">
                             <text class="back-body">{{ cur.back }}</text>
                         </scroll-view>
+                        <view v-if="hasAnchor" class="src-link" @tap.stop="goSource">📖 查看教材原文 ›</view>
                     </view>
                 </view>
             </view>
@@ -42,15 +46,15 @@
             <view class="rate">
                 <view class="rate-btn bad" @tap.stop="rate(1)">
                     <text class="rate-name">不认识</text>
-                    <text class="rate-sub">稍后再见</text>
+                    <text class="rate-sub">30 分钟后重现</text>
                 </view>
                 <view class="rate-btn mid" @tap.stop="rate(2)">
                     <text class="rate-name">模糊</text>
-                    <text class="rate-sub">还需巩固</text>
+                    <text class="rate-sub">明日再复习</text>
                 </view>
                 <view class="rate-btn good" @tap.stop="rate(3)">
                     <text class="rate-name">已掌握</text>
-                    <text class="rate-sub">下次跳过</text>
+                    <text class="rate-sub">间隔逐渐拉长</text>
                 </view>
             </view>
 
@@ -64,38 +68,61 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onShow } from '@dcloudio/uni-app'
 import { loadDecks, loadDeck } from '../../common/learn.js'
-import { setCardMastery, cardMasteryOf } from '../../common/store.js'
+import { setCardMastery, cardMasteryOf, cardStateRef, dueCardIds } from '../../common/store.js'
+import { applyNavTheme } from '../../common/theme.js'
 
 const FILTERS = [
     { key: 'all', name: '全部' },
     { key: 'new', name: '未学' },
-    { key: 'weak', name: '待巩固' }
+    { key: 'weak', name: '待巩固' },
+    { key: 'due', name: '到期' }
 ]
 
 const deckId = ref('')
 const cards = ref([])
-const deckMeta = ref({})
 const ready = ref(false)
-const queue = ref([]) // 原 cards 的索引序列
+const queue = ref([])
 const pos = ref(0)
 const flipped = ref(false)
 const shuffled = ref(false)
 const filter = ref('all')
 const mastery = ref(0)
+const dueMode = ref(false)
+const night = ref(false)
+const touchX = ref(0)
 
 onLoad(async (q) => {
     deckId.value = q.deck || 'fangji'
     const [decks, list] = await Promise.all([loadDecks(), loadDeck(deckId.value)])
-    deckMeta.value = decks.find((d) => d.id === deckId.value) || {}
+    const meta = decks.find((d) => d.id === deckId.value) || {}
     cards.value = list
-    uni.setNavigationBarTitle({ title: deckMeta.value.name || '记忆卡' })
+    uni.setNavigationBarTitle({ title: meta.name || '记忆卡' })
+    if (q.due === '1') {
+        dueMode.value = true
+        filter.value = 'due'
+    }
     buildQueue()
     ready.value = true
 })
 
+onShow(() => {
+    night.value = applyNavTheme()
+})
+
 const cur = computed(() => cards.value[queue.value[pos.value]] || {})
+const hasAnchor = computed(() => {
+    const m = cur.value.meta
+    return m && m.book && m.g !== null && m.g !== undefined
+})
+const dueInfo = computed(() => {
+    const real = queue.value[pos.value]
+    if (real === undefined || !dueMode.value) return ''
+    const st = cardStateRef(deckId.value, real)
+    if (!st || !st.lv) return ''
+    return ['', '尚未记住 · 今日强化', '模糊 · 间隔复习', '巩固中'][st.lv] || ''
+})
 
 function buildQueue() {
     let idx = cards.value.map((_, i) => i)
@@ -106,14 +133,17 @@ function buildQueue() {
             return v === 1 || v === 2
         })
     }
-    if (shuffled.value) {
+    if (filter.value === 'due') {
+        idx = dueCardIds(deckId.value, cards.value.length)
+    }
+    if (shuffled.value && filter.value !== 'due') {
         for (let i = idx.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1))
             ;[idx[i], idx[j]] = [idx[j], idx[i]]
         }
     }
     queue.value = idx
-    pos.value = 0
+    if (pos.value >= idx.length) pos.value = 0
     flipped.value = false
     syncMastery()
 }
@@ -130,11 +160,9 @@ function rate(level) {
     const real = queue.value[pos.value]
     if (real === undefined) return
     setCardMastery(deckId.value, real, level)
-    const nextPos = pos.value + 1
-    if (nextPos < queue.value.length) {
-        pos.value = nextPos
+    if (pos.value < queue.value.length - 1) {
+        pos.value++
     } else {
-        // 到达末尾：重新构建队列（掌握后的新状态会刷新待巩固）
         buildQueue()
     }
     flipped.value = false
@@ -158,13 +186,35 @@ function next() {
 }
 
 function resetFilter(f) {
-    filter.value = f || 'all'
+    filter.value = f
+    dueMode.value = f === 'due'
     buildQueue()
+}
+
+function goNormal() {
+    resetFilter('all')
 }
 
 function toggleShuffle() {
     shuffled.value = !shuffled.value
     buildQueue()
+}
+
+function goSource() {
+    const m = cur.value.meta
+    if (!m || !m.book) return
+    uni.navigateTo({ url: `/pages/reader/reader?slug=${m.book}&g=${m.g}` })
+}
+
+// ---- 手势切换 ----
+function ts(e) {
+    touchX.value = e.changedTouches?.[0]?.clientX ?? 0
+}
+
+function te(e) {
+    const dx = (e.changedTouches?.[0]?.clientX ?? 0) - touchX.value
+    if (dx < -70) next()
+    else if (dx > 70) prev()
 }
 </script>
 
@@ -214,6 +264,14 @@ function toggleShuffle() {
     width: 150rpx;
 }
 
+.due-tag {
+    font-size: 22rpx;
+    color: #8b3a3a;
+    background: rgba(139, 58, 58, 0.1);
+    padding: 8rpx 20rpx;
+    border-radius: 999rpx;
+}
+
 .seg {
     display: flex;
     background: #efe8d6;
@@ -222,9 +280,9 @@ function toggleShuffle() {
 }
 
 .seg-item {
-    font-size: 23rpx;
+    font-size: 22rpx;
     color: #8d8371;
-    padding: 8rpx 22rpx;
+    padding: 8rpx 18rpx;
     border-radius: 11rpx;
 
     &.on {
@@ -302,6 +360,12 @@ function toggleShuffle() {
     line-height: 1.4;
 }
 
+.card-due {
+    margin-top: 26rpx;
+    font-size: 22rpx;
+    color: #b3543f;
+}
+
 .card-hint {
     position: absolute;
     bottom: 40rpx;
@@ -319,7 +383,7 @@ function toggleShuffle() {
 
 .back-scroll {
     flex: 1;
-    height: 480rpx;
+    height: 440rpx;
 }
 
 .back-body {
@@ -327,6 +391,14 @@ function toggleShuffle() {
     line-height: 1.9;
     color: #4a453b;
     white-space: pre-line;
+}
+
+.src-link {
+    text-align: center;
+    margin-top: 18rpx;
+    padding: 16rpx 0 4rpx;
+    font-size: 24rpx;
+    color: #8b3a3a;
 }
 
 .rate {

@@ -1,9 +1,9 @@
 {
     "name": "光明中医文库",
     "appid": "__UNI__0000000",
-    "description": "光明中医函授教材 26 部电子书全文离线阅读",
-    "versionName": "2.0.0",
-    "versionCode": 200,
+    "description": "光明中医函授教材 26 部全文离线文库 + 记忆卡/思考题学习系统 + 中医辨证辅助",
+    "versionName": "2.1.0",
+    "versionCode": 210,
     "transformPx": false,
     "app-plus": {
         "usingComponents": true,
@@ -13,8 +13,14 @@
             "alwaysShowBeforeRender": true,
             "waiting": true,
             "autoclose": true,
-            "delay": 0
+            "delay": 0,
+            "useOriginalMsgbox": true
         },
+        /* 云打包发布指南：
+           1. HBuilderX 打开 manifest.json → 基础配置：AppID 点“重新获取”，应用名/版本按正式信息填写
+           2. App 图标配置：点“浏览”选择 static/icon.png（1024×1024，已备好），或“自动生成所有图标并替换”
+           3. App 启动图配置：自定义启动图选择 static/splash.png（1125×2436，已备好）
+           4. 发行 → 原生App-云打包：选 Android(apk)/iOS(ipa) → 打包 */
         "modules": {},
         "distribute": {
             "android": {

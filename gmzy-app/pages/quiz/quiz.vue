@@ -1,5 +1,5 @@
 <template>
-    <view class="quiz">
+    <view class="quiz" :class="{ night }">
         <view v-if="!ready" class="loading">题库加载中…</view>
         <template v-else-if="!queue.length">
             <view class="done-all">
@@ -32,6 +32,7 @@
                 <scroll-view scroll-y class="qscroll">
                     <text class="qtext serif-font">{{ cur.idx + 1 }}. {{ cur.q }}</text>
                 </scroll-view>
+                <view v-if="hasAnchor" class="src-link" @tap="goSource">📖 回到教材找答案（{{ cur.chapter }}）›</view>
                 <text class="qhint">先在心里作答，然后如实标记，遗忘的会自动进入"待巩固"。</text>
             </view>
 
@@ -66,6 +67,7 @@ import { ref, reactive, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { loadQuizBook } from '../../common/learn.js'
 import { setQuizAnswer, quizStatsOf, resetQuiz, store } from '../../common/store.js'
+import { applyNavTheme } from '../../common/theme.js'
 
 const FILTERS = [
     { key: 'all', name: '全部' },
@@ -81,6 +83,7 @@ const queue = ref([])
 const pos = ref(0)
 const filter = ref('all')
 const stats = reactive({})
+const night = ref(false)
 
 onLoad(async (q) => {
     bookKey.value = decodeURIComponent(q.k || '')
@@ -93,8 +96,20 @@ onLoad(async (q) => {
 })
 
 onShow(() => {
+    night.value = applyNavTheme()
     refreshStats()
 })
+
+const hasAnchor = computed(() => {
+    const c = cur.value
+    return c && c.book && c.g !== null && c.g !== undefined
+})
+
+function goSource() {
+    const c = cur.value
+    if (!c.book) return
+    uni.navigateTo({ url: `/pages/reader/reader?slug=${c.book}&g=${c.g}` })
+}
 
 const cur = computed(() => {
     const i = queue.value[pos.value]
@@ -273,6 +288,14 @@ function confirmReset() {
     margin-top: 24rpx;
     font-size: 21rpx;
     color: #b9ac92;
+}
+
+.src-link {
+    margin-top: 20rpx;
+    padding: 16rpx 0 4rpx;
+    font-size: 24rpx;
+    color: #8b3a3a;
+    border-top: 1rpx dashed #e4dcc8;
 }
 
 .rate {

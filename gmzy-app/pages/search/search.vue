@@ -1,5 +1,5 @@
 <template>
-    <view class="search">
+    <view class="search" :class="{ night }">
         <!-- 搜索栏 -->
         <view class="bar">
             <view class="bar-input">
@@ -73,7 +73,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { loadCatalog, loadBook } from '../../common/books.js'
-import { pending } from '../../common/store.js'
+import { pending, store } from '../../common/store.js'
+import { applyNavTheme } from '../../common/theme.js'
 import { blockText, chapterOf } from '../../common/util.js'
 
 const catalog = ref([])
@@ -100,7 +101,9 @@ const hotWords = ['桂枝汤', '小柴胡汤', '足三里', '三阴交', '脉浮
 
 const MAX_RESULTS = 300
 
+const night = computed(() => store.settings.night)
 onShow(() => {
+    applyNavTheme()
     if (pending.keyword) {
         keyword.value = pending.keyword
         pending.keyword = ''
