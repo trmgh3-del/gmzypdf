@@ -2,6 +2,22 @@
 export default {
     onLaunch() {
         // 应用启动：状态在 common/store.js 中惰性恢复
+        // #ifdef H5
+        // H5 离线缓存：注册数据目录 Service Worker（生产构建才启用）
+        if (typeof window !== 'undefined' && 'serviceWorker' in navigator && location.hostname !== 'localhost') {
+            try {
+                const link = document.createElement('link')
+                link.rel = 'manifest'
+                link.href = 'static/pwa/manifest.webmanifest'
+                document.head.appendChild(link)
+                // 离线 SW: 站点根存在 /sw.js 时注册（部署指引见 README；
+                // SW 作用域受路径限制，只在本文件被放到站点根才生效）
+                fetch('/sw.js', { method: 'HEAD' }).then((r) => {
+                    if (r.ok) navigator.serviceWorker.register('/sw.js').catch(() => {})
+                }).catch(() => {})
+            } catch (e) { /* noop */ }
+        }
+        // #endif
     },
     onShow() {},
     onHide() {}

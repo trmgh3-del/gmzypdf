@@ -1,0 +1,11 @@
+{
+  "name": "光明中医文库·学习诊断",
+  "short_name": "光明中医",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f3ecdc",
+  "theme_color": "#8b3a3a",
+  "icons": [
+    { "src": "static/icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }
+  ]
+}
