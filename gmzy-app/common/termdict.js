@@ -5,7 +5,7 @@ import { loadDecks, loadDeck } from './learn.js'
 let ready = null // Promise<Map<term, entry>> | null
 // entry: { term, back, sub, deck, deckName, book, g }
 
-const PRIORITY = { point: 0, fangji: 1, herb: 2, koujue: 3 }
+const PRIORITY = { point: 0, fangji: 1, herb: 2, koujue: 3, bingz: 4 }
 
 export function loadDict() {
     if (ready) return ready
@@ -15,16 +15,24 @@ export function loadDict() {
         const lists = await Promise.all(decks.map((d) => loadDeck(d.id)))
         decks.forEach((d, di) => {
             for (const c of lists[di]) {
-                const term = (c.front || '').trim()
-                if (term.length < 2 || term.length > 8) continue
+                // 病证卡 front=病·证，取病名做词条（至少3字才收，防误命中）
+                let term = (c.front || '').trim()
+                if (d.id === 'bingz') {
+                    term = term.split('·')[0]
+                    if (term.length < 3) continue
+                } else if (term.length < 2 || term.length > 8) {
+                    continue
+                }
                 const entry = {
                     term,
+                    front: c.front,
                     back: c.back,
                     sub: c.sub,
                     deck: d.id,
                     deckName: d.name,
                     book: c.meta?.book || '',
-                    g: c.meta?.g
+                    g: c.meta?.g,
+                    uuid: c.meta?.uuid || ''
                 }
                 const old = map.get(term)
                 if (!old || PRIORITY[d.id] < PRIORITY[old.deck]) map.set(term, entry)

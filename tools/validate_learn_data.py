@@ -60,7 +60,7 @@ def book_blocks(slug):
 # ---------------- 1. 记忆卡 ----------------
 print("== 记忆卡 ==")
 decks = load("learn", "decks.json")
-EXPECT_MIN = {"fangji": 100, "herb": 200, "point": 380, "koujue": 380}
+EXPECT_MIN = {"fangji": 100, "herb": 200, "point": 380, "koujue": 380, "bingz": 40}
 for d in decks:
     cards = load("learn", f"deck-{d['id']}.json")
     if len(cards) != d["count"]:

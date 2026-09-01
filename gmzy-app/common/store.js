@@ -21,10 +21,14 @@ const defaults = {
     bookmarks: [],
     // 学习系统
     learn: {
-        // 记忆卡掌握度: { 'fangji_3': 2 }  0未学 1不认识 2模糊 3已掌握
+        // key 方案版本：1=索引键（旧），2=uuid 稳定键
+        keyV: 2,
+        // 记忆卡状态: { 'fangji:827d96bd': {lv,n,ef,ivl,next} }
         cardMastery: {},
-        // 题库进度: { bookSlug: { [题号]: 1会 | 2不会 } }
+        // 题库进度: { 'q0.json': { 'q:xxxx': 1会 | 2不会 } }
         quizDone: {},
+        // 每日新卡计数: { '2026-09-01': { fangji: 12 } }
+        newDaily: {},
         // 每日活跃: { '2026-09-01': { cards: 10, quiz: 5, done: 1 } }
         activity: {},
         // 辨证记录: [{ ts, symptoms: [label...], top: { name, pct }, count }]
@@ -44,8 +48,10 @@ function loadInitial() {
             if (Array.isArray(saved.bookmarks)) init.bookmarks = saved.bookmarks
             if (saved.learn) {
                 const L = saved.learn
+                init.learn.keyV = L.keyV || 1
                 if (L.cardMastery) init.learn.cardMastery = L.cardMastery
                 if (L.quizDone) init.learn.quizDone = L.quizDone
+                if (L.newDaily) init.learn.newDaily = L.newDaily
                 if (L.activity) init.learn.activity = L.activity
                 if (Array.isArray(L.diagHistory)) init.learn.diagHistory = L.diagHistory
             }
@@ -127,66 +133,61 @@ function bumpActivity(kind) {
     a[kind] = (a[kind] || 0) + 1
 }
 
-// ---- 记忆卡（SM-2 间隔重复） ----
+// ---- 记忆卡（SM-2 间隔重复，uuid 稳定键） ----
 // 卡片状态: { lv: 1|2|3, n: 连续答对次数, ef: 难度因子, ivl: 间隔天数, next: 到期时间戳 }
-// lv 1=不认识 2=模糊 3=已掌握；旧版本存数字时按 lv 懒迁移。
-function cardState(deckId, cardIdx) {
-    const k = deckId + '_' + cardIdx
-    let v = store.learn.cardMastery[k]
-    if (typeof v === 'number') {
-        v = { lv: v, n: 0, ef: 2.5, ivl: 0, next: Date.now() }
-        store.learn.cardMastery[k] = v
-    }
-    return v || null
+// keyV=2 起 key 为卡片数据内嵌 uuid（卡组增补不再错位）；旧索引键由 migrateLegacyLearn 迁移。
+function cardState(uuid) {
+    const v = store.learn.cardMastery[uuid]
+    return v && typeof v === 'object' ? v : null
 }
 
 const DAY = 86400000
 
-export function setCardMastery(deckId, cardIdx, level) {
-    const k = deckId + '_' + cardIdx
-    const prev = cardState(deckId, cardIdx) || { lv: 0, n: 0, ef: 2.5, ivl: 0, next: 0 }
+export function setCardMastery(uuid, level) {
+    const prev = cardState(uuid) || { lv: 0, n: 0, ef: 2.5, ivl: 0, next: 0 }
     const q = level === 3 ? 5 : level === 2 ? 3 : 1
     let { n, ef, ivl } = prev
     const now = Date.now()
+    const isNew = !prev.lv
     if (q < 3) {
         n = 0
         ivl = 0
-        // 不认识：30 分钟后重现；当天仍计入到期
         const next = level === 1 ? now + 30 * 60000 : now + DAY
         ef = Math.max(1.3, ef - 0.2)
-        store.learn.cardMastery[k] = { lv: level, n, ef, ivl, next }
+        store.learn.cardMastery[uuid] = { lv: level, n, ef, ivl, next }
     } else {
         n += 1
         ivl = n === 1 ? 1 : n === 2 ? 3 : Math.max(4, Math.round(ivl * ef))
         ef = Math.max(1.3, ef + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02)))
-        store.learn.cardMastery[k] = { lv: level, n, ef, ivl, next: now + ivl * DAY }
+        store.learn.cardMastery[uuid] = { lv: level, n, ef, ivl, next: now + ivl * DAY }
     }
+    if (isNew) markNewCardUsed(uuid)
     bumpActivity('cards')
 }
 
-export function cardMasteryOf(deckId, cardIdx) {
-    const s = cardState(deckId, cardIdx)
+export function cardMasteryOf(uuid) {
+    const s = cardState(uuid)
     return s ? s.lv : 0
 }
 
-// 取完整卡片状态（到期时间、连续答对等），页面展示用
-export function cardStateRef(deckId, cardIdx) {
-    return cardState(deckId, cardIdx)
+export function cardStateRef(uuid) {
+    return cardState(uuid)
 }
 
-// 到期（含新卡 neverDue=false 时只看已学）
-export function isCardDue(deckId, cardIdx, now = Date.now()) {
-    const s = cardState(deckId, cardIdx)
+export function isCardDue(uuid, now = Date.now()) {
+    const s = cardState(uuid)
     return !!s && s.next <= now
 }
 
-// 卡包统计: { mastered, fuzzy, unknown, done, due }
+// 卡包统计: { mastered, fuzzy, unknown, done, due }（按 uuid 前缀扫描，卡组变化不受影响）
 export function deckStats(deckId, total) {
     const now = Date.now()
     const s = { mastered: 0, fuzzy: 0, unknown: 0, done: 0, due: 0 }
-    for (let i = 0; i < total; i++) {
-        const st = cardState(deckId, i)
-        if (!st) continue
+    const prefix = deckId + ':'
+    for (const k of Object.keys(store.learn.cardMastery)) {
+        if (!k.startsWith(prefix)) continue
+        const st = store.learn.cardMastery[k]
+        if (!st || typeof st !== 'object') continue
         s.done++
         if (st.lv === 3) s.mastered++
         else if (st.lv === 2) s.fuzzy++
@@ -196,21 +197,46 @@ export function deckStats(deckId, total) {
     return s
 }
 
-// 到期卡片索引（先到期先排，其次按 lv 升序——不认识的排前）
-export function dueCardIds(deckId, total) {
+// 到期卡片 uuid（先到期先排，其次按 lv 升序——不认识的排前）
+export function dueCardUuids(deckId) {
     const now = Date.now()
     const arr = []
-    for (let i = 0; i < total; i++) {
-        const st = cardState(deckId, i)
-        if (st && st.next <= now) arr.push([i, st])
+    const prefix = deckId + ':'
+    for (const k of Object.keys(store.learn.cardMastery)) {
+        if (!k.startsWith(prefix)) continue
+        const st = store.learn.cardMastery[k]
+        if (st && typeof st === 'object' && st.next <= now) arr.push([k, st])
     }
     arr.sort((a, b) => a[1].lv - b[1].lv || a[1].next - b[1].next)
     return arr.map((x) => x[0])
 }
 
-export function resetDeck(deckId, total) {
+export function resetDeck(deckId) {
     const m = store.learn.cardMastery
-    for (let i = 0; i < total; i++) delete m[deckId + '_' + i]
+    const prefix = deckId + ':'
+    for (const k of Object.keys(m)) if (k.startsWith(prefix)) delete m[k]
+}
+
+// ---- 每日新卡配额 ----
+export function newPerDayLimit() {
+    return store.settings.newPerDay || 20
+}
+
+export function newTodayCount(deckId) {
+    const t = todayStr()
+    return (store.learn.newDaily?.[t] || {})[deckId] || 0
+}
+
+export function quotaRemaining(deckId) {
+    return Math.max(0, newPerDayLimit() - newTodayCount(deckId))
+}
+
+export function markNewCardUsed(uuid) {
+    if (!store.learn.newDaily) store.learn.newDaily = {}
+    const t = todayStr()
+    if (!store.learn.newDaily[t]) store.learn.newDaily[t] = {}
+    const deck = uuid.split(':')[0]
+    store.learn.newDaily[t][deck] = (store.learn.newDaily[t][deck] || 0) + 1
 }
 
 // ---- 题库 ----
@@ -311,6 +337,60 @@ export function totalDue(decks) {
 // ---- 全局外观 ----
 export function setNight(on) {
     store.settings.night = !!on
+}
+
+// ================= 数据备份 / 恢复 =================
+
+export function backupBundle() {
+    return JSON.stringify({
+        app: 'gmzy',
+        v: 2,
+        ts: Date.now(),
+        settings: store.settings,
+        progress: store.progress,
+        history: store.history,
+        bookmarks: store.bookmarks,
+        learn: store.learn
+    })
+}
+
+// 导入校验：字段齐全才覆盖；返回错误信息或 null
+export function restoreBundle(jsonText) {
+    let obj
+    try {
+        obj = JSON.parse(jsonText)
+    } catch (e) {
+        return '备份文件解析失败'
+    }
+    if (!obj || obj.app !== 'gmzy' || !obj.learn) return '不是有效的备份文件'
+    if (obj.settings) Object.assign(store.settings, obj.settings)
+    if (obj.progress) store.progress = obj.progress
+    if (Array.isArray(obj.history)) store.history = obj.history
+    if (Array.isArray(obj.bookmarks)) store.bookmarks = obj.bookmarks
+    if (obj.learn) {
+        store.learn = Object.assign(store.learn, obj.learn)
+    }
+    // 立即持久化（跳过 debounce）
+    try {
+        uni.setStorageSync(KEY, JSON.stringify(store))
+    } catch (e) { /* 忽略 */ }
+    return null
+}
+
+// 检测并存在旧索引键（迁移由 common/learn.js 的 migrateLegacyLearn 完成）
+export function hasLegacyKeys() {
+    if (store.learn.keyV === 2) return false
+    for (const k of Object.keys(store.learn.cardMastery)) {
+        if (/^[a-z]+_\d+$/.test(k)) return true
+    }
+    for (const k of Object.keys(store.learn.quizDone)) {
+        if (!/^q\d+\.json$/.test(k)) return true
+    }
+    return false
+}
+
+export function markMigrated() {
+    store.learn.keyV = 2
 }
 
 export function isNight() {

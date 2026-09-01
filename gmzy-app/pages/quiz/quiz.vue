@@ -9,6 +9,7 @@
             </view>
         </template>
         <template v-else>
+            <view v-if="chapMode" class="chap-tip serif-font">📖 {{ chapRange.title }}</view>
             <view class="topbar">
                 <text class="counter serif-font">{{ pos + 1 }} / {{ queue.length }}</text>
                 <view class="seg">
@@ -65,17 +66,18 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
-import { loadQuizBook } from '../../common/learn.js'
-import { setQuizAnswer, quizStatsOf, resetQuiz, store } from '../../common/store.js'
+import { loadQuizBook, migrateLegacyLearn } from '../../common/learn.js'
+import {
+    store,
+    setQuizAnswer,
+    quizStatsOf,
+    resetQuiz,
+    hasLegacyKeys,
+    markMigrated
+} from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
 
-const FILTERS = [
-    { key: 'all', name: '全部' },
-    { key: 'new', name: '未答' },
-    { key: 'weak', name: '待巩固' }
-]
-
-const bookKey = ref('')
+const bookKey = ref('')   // q<N>.json
 const bookTitle = ref('')
 const list = ref([])
 const ready = ref(false)
@@ -84,11 +86,36 @@ const pos = ref(0)
 const filter = ref('all')
 const stats = reactive({})
 const night = ref(false)
+const chapMode = ref(false)
+const chapRange = reactive({ s: 0, e: 0, title: '' })
+
+const FILTERS = computed(() =>
+    chapMode.value
+        ? [
+              { key: 'chap', name: '本章' },
+              { key: 'all', name: '全部' },
+              { key: 'new', name: '未答' },
+              { key: 'weak', name: '待巩固' }
+          ]
+        : [
+              { key: 'all', name: '全部' },
+              { key: 'new', name: '未答' },
+              { key: 'weak', name: '待巩固' }
+          ]
+)
 
 onLoad(async (q) => {
     bookKey.value = decodeURIComponent(q.k || '')
     bookTitle.value = decodeURIComponent(q.title || '')
+    if (q.cs !== undefined && q.ce !== undefined) {
+        chapMode.value = true
+        chapRange.s = +q.cs
+        chapRange.e = +q.ce
+        chapRange.title = decodeURIComponent(q.ctitle || '')
+        filter.value = 'chap'
+    }
     uni.setNavigationBarTitle({ title: bookTitle.value || '复习思考题' })
+    if (hasLegacyKeys()) await migrateLegacyLearn(store, markMigrated)
     list.value = await loadQuizBook(bookKey.value)
     refreshStats()
     buildQueue()
@@ -100,15 +127,8 @@ onShow(() => {
     refreshStats()
 })
 
-const hasAnchor = computed(() => {
-    const c = cur.value
-    return c && c.book && c.g !== null && c.g !== undefined
-})
-
-function goSource() {
-    const c = cur.value
-    if (!c.book) return
-    uni.navigateTo({ url: `/pages/reader/reader?slug=${c.book}&g=${c.g}` })
+function doneMap() {
+    return store.learn.quizDone[bookKey.value] || {}
 }
 
 const cur = computed(() => {
@@ -118,20 +138,25 @@ const cur = computed(() => {
 })
 
 const state = computed(() => {
-    const d = store.learn.quizDone[bookKey.value] || {}
     const i = queue.value[pos.value]
-    return i === undefined ? 0 : d[i] || 0
+    if (i === undefined) return 0
+    return doneMap()[list.value[i].u] || 0
 })
 
 function refreshStats() {
     Object.assign(stats, quizStatsOf(bookKey.value, list.value.length))
 }
 
+function inChapRange(it) {
+    return !!chapMode.value && it.g !== null && it.g !== undefined && it.g >= chapRange.s && it.g <= chapRange.e
+}
+
 function buildQueue() {
-    const done = store.learn.quizDone[bookKey.value] || {}
+    const done = doneMap()
     let idx = list.value.map((_, i) => i)
-    if (filter.value === 'new') idx = idx.filter((i) => !done[i])
-    if (filter.value === 'weak') idx = idx.filter((i) => done[i] === 2)
+    if (filter.value === 'chap') idx = idx.filter((i) => inChapRange(list.value[i]))
+    else if (filter.value === 'new') idx = idx.filter((i) => !done[list.value[i].u])
+    else if (filter.value === 'weak') idx = idx.filter((i) => done[list.value[i].u] === 2)
     queue.value = idx
     if (pos.value >= queue.value.length) pos.value = 0
 }
@@ -144,7 +169,7 @@ function setFilter(f) {
 function answer(ok) {
     const i = queue.value[pos.value]
     if (i === undefined) return
-    setQuizAnswer(bookKey.value, i, ok)
+    setQuizAnswer(bookKey.value, list.value[i].u, ok)
     refreshStats()
     if (pos.value < queue.value.length - 1) pos.value++
     else buildQueue()
@@ -171,6 +196,17 @@ function confirmReset() {
             }
         }
     })
+}
+
+const hasAnchor = computed(() => {
+    const c = cur.value
+    return c && c.book && c.g !== null && c.g !== undefined
+})
+
+function goSource() {
+    const c = cur.value
+    if (!c.book) return
+    uni.navigateTo({ url: `/pages/reader/reader?slug=${c.book}&g=${c.g}` })
 }
 </script>
 
@@ -204,6 +240,15 @@ function confirmReset() {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.chap-tip {
+    font-size: 24rpx;
+    color: #5c2018;
+    background: rgba(139, 58, 58, 0.08);
+    border-radius: 12rpx;
+    padding: 14rpx 22rpx;
+    margin-bottom: 16rpx;
 }
 
 .topbar {

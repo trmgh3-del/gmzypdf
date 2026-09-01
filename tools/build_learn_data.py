@@ -74,6 +74,12 @@ def norm(s):
     return re.sub(r"\s+", "", re.sub(r"\*\*", "", s))
 
 
+def crc(s):
+    """稳定短散列，用于卡片/题目稳定 uuid。"""
+    import zlib
+    return format(zlib.crc32(s.encode("utf-8")) & 0xFFFFFFFF, "08x")
+
+
 def block_text(b):
     if "x" in b:
         return b["x"]
@@ -182,7 +188,7 @@ def deck_fangji():
                     "front": name,
                     "sub": f"《{src}》" if src else cur_cat,
                     "back": back,
-                    "meta": {"deck": "fangji", "book": slug, "g": anch.find("h", t)}
+                    "meta": {"deck": "fangji", "book": slug, "g": anch.find("h", t), "uuid": "fangji:" + crc(name + "|" + back)}
                 })
             i = j
             continue
@@ -232,7 +238,7 @@ def deck_herb():
                     "front": name,
                     "sub": cur_sec.replace("节", "节·") if cur_sec else cur_ch,
                     "back": "\n".join(body),
-                    "meta": {"deck": "herb", "book": slug, "g": anch.find("h", t)}
+                    "meta": {"deck": "herb", "book": slug, "g": anch.find("h", t), "uuid": "herb:" + crc(name + "|" + "\n".join(body))}
                 })
             i = j
             continue
@@ -267,12 +273,74 @@ def deck_point():
                         "front": name,
                         "sub": cur_mer,
                         "back": "〔定位〕" + trunc(loc, 70) + "\n〔主治〕" + trunc(zhu.replace("\n", ""), 70),
-                        "meta": {"deck": "point", "book": slug, "g": anch.find("h", t)}
+                        "meta": {"deck": "point", "book": slug, "g": anch.find("h", t), "uuid": "point:" + crc(slug + name + "|" + loc + zhu)}
                     })
                     i = j
                     continue
             i += 1
         print(f"{stem.split('-')[1]}[miss:{anch.miss}]", end=" ")
+    return cards
+
+
+# ---------------- 病证·方药卡（16中医外科学） ----------------
+def deck_bingz():
+    """病 → 证型 → 证候/治法/方药 三段式提取。
+    《16中医外科学》"（三）常见证治"小节内的编号 "N.××证：…" + 治法： + 方药： 结构。"""
+    stem = "16中医外科学"
+    slug = stem2slug(stem)
+    anch = Anchor(stem, slug)
+    blks = blocks_of(read(stem))
+    cards = []
+    cur_bing = cur_chap = ""
+    i = 0
+    mcase = re.compile(r"^\d{1,2}[.．、]\s*(.{1,14}证)[:：](.*)$")
+    while i < len(blks):
+        kind, lv, t = blks[i]
+        if kind == "h":
+            if lv == 2:
+                cur_chap = t
+            elif lv == 3:
+                cur_bing = re.sub(r"^第[一二三四五六七八九十\d]+[章节]", "", t).split("（")[0].strip()
+            i += 1
+            continue
+        m = mcase.match(t)
+        if not m or not cur_bing:
+            i += 1
+            continue
+        xing, zhenghou = m.group(1).strip(), m.group(2).strip()
+        # 只看确实接 治法：的（排除普通编号列举）
+        zhifa = fang = ""
+        g0 = anch.find("p", t)
+        j = i + 1
+        while j < len(blks) and blks[j][0] != "h" and j - i <= 14:
+            tt = blks[j][2].strip()
+            if tt.startswith("治法"):
+                zhifa = re.sub(r"^治法[:：]?\s*", "", tt).rstrip("。")
+                k = j + 1
+                while k < len(blks) and blks[k][0] == "p" and k - j <= 4:
+                    tf = blks[k][2].strip()
+                    if not tf:
+                        k += 1
+                        continue
+                    if tf.startswith("方药"):
+                        fang = re.sub(r"^方药[:：]?\s*", "", tf).rstrip("。")
+                    break
+                break
+            if not zhifa and not label_of(tt) and len(tt) < 60 and not mcase.match(tt):
+                zhenghou += tt
+            j += 1
+        if zhifa and fang and zhenghou:
+            front = f"{cur_bing}·{xing}"
+            back = (f"【证候】{trunc(zhenghou, 90)}\n【治法】{trunc(zhifa, 40)}\n【方药】{trunc(fang, 70)}")
+            cards.append({
+                "front": front,
+                "sub": f"16外科学·{cur_chap}",
+                "back": back,
+                "meta": {"deck": "bingz", "book": slug, "g": g0,
+                         "uuid": "bingz:" + crc(front + "|" + back)}
+            })
+        i += 1
+    print(f"  [锚点miss:{anch.miss}]", end=" ")
     return cards
 
 
@@ -312,7 +380,7 @@ def deck_koujue():
                 "front": sec,
                 "sub": f"{cur1}·第{len([c for c in cards if c['front']==sec])+1}诀",
                 "back": "\n".join(plain(v) for v in verses),
-                "meta": {"deck": "koujue", "book": slug, "g": anch.find("p", t)}
+                "meta": {"deck": "koujue", "book": slug, "g": anch.find("p", t), "uuid": "koujue:" + crc(sec + t + "|" + "\n".join(plain(v) for v in verses))}
             })
             i = j
             continue
@@ -337,7 +405,7 @@ def chapter_of(lvl_map):
     return ""
 
 
-def collect_q(lines, start, lvl_map, anch, anchor_kind, anchor_text):
+def collect_q(lines, start, lvl_map, anch, anchor_kind, anchor_text, stem):
     """从 start 行起收集编号题。返回 (items, end)。"""
     items = []
     g = anch.find(anchor_kind, anchor_text) if anch else None
@@ -361,7 +429,7 @@ def collect_q(lines, start, lvl_map, anch, anchor_kind, anchor_text):
             phase = 1
             q = m.group(1).strip()
             if not re.search(r"学时|(目的要求)", q):
-                items.append({"chapter": chapter, "q": q, "g": g})
+                items.append({"chapter": chapter, "q": q, "g": g, "u": "q:" + crc(stem + "|" + q)})
             j += 1
             continue
         if phase == 1 and items and not re.match(r"^[一二三四五六七八九十]、", s) \
@@ -388,7 +456,7 @@ def extract_quiz(stem):
             lv = len(mh.group(1))
             title = mh.group(2).strip()
             if QUIZ_MARK_RE.match(title) or (("复习思考题" in title) and len(title) <= 14):
-                qs, j = collect_q(lines, i + 1, lvl_map, anch, "h", title)
+                qs, j = collect_q(lines, i + 1, lvl_map, anch, "h", title, stem)
                 items += qs
                 i = j
                 continue
@@ -399,7 +467,7 @@ def extract_quiz(stem):
             i += 1
             continue
         if QUIZ_MARK_RE.match(s):
-            qs, j = collect_q(lines, i + 1, lvl_map, anch, "p", s)
+            qs, j = collect_q(lines, i + 1, lvl_map, anch, "p", s, stem)
             items += qs
             i = j
             continue
@@ -429,9 +497,10 @@ def main():
         ("herb", "中药卡", "性味归经·药效应用", deck_herb()),
         ("point", "穴位卡", "定位取穴·主治功效", deck_point()),
         ("koujue", "口诀卡", "歌诀背诵·朗朗上口", deck_koujue()),
+        ("bingz", "病证卡", "病→证→治法方药", deck_bingz()),
     ]
     summary = []
-    icons = {"fangji": "方", "herb": "药", "point": "穴", "koujue": "诀"}
+    icons = {"fangji": "方", "herb": "药", "point": "穴", "koujue": "诀", "bingz": "证"}
     for did, name, desc, cards in decks:
         with open(os.path.join(LEARN_DIR, f"deck-{did}.json"), "w", encoding="utf-8") as f:
             json.dump(cards, f, ensure_ascii=False, separators=(",", ":"))

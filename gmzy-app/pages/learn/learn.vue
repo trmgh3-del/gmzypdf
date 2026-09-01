@@ -39,6 +39,8 @@
             </view>
         </view>
 
+        <view v-if="migrating" class="mig-tip">正在升级旧学习记录，请稍候…</view>
+
         <!-- 记忆卡包 -->
         <view class="sec">
             <view class="sec-head"><text class="sec-title">记忆卡</text></view>
@@ -61,6 +63,7 @@
                     <text class="deck-meta">
                         已掌握 {{ statOf(d).mastered }} · 待巩固 {{ statOf(d).fuzzy + statOf(d).unknown }} · 未学 {{ d.count - statOf(d).done }}
                     </text>
+                    <text class="deck-meta new-line" v-if="statOf(d).done">今日新卡 {{ nt(d) }}/{{ newLimit }}</text>
                 </view>
             </view>
         </view>
@@ -89,12 +92,17 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { onShow, onLoad } from '@dcloudio/uni-app'
-import { loadDecks, loadQuizIndex, quizKey } from '../../common/learn.js'
+import { loadDecks, loadQuizIndex, quizKey, migrateLegacyLearn } from '../../common/learn.js'
 import {
+    store,
     deckStats,
     quizStatsOf,
     learnOverview,
-    weekSeries
+    weekSeries,
+    newPerDayLimit,
+    newTodayCount,
+    hasLegacyKeys,
+    markMigrated
 } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
 
@@ -110,7 +118,16 @@ const totalQuiz = ref(0)
 const dueTotal = computed(() => decks.value.reduce((s, d) => s + (statOf(d).due || 0), 0))
 const weekMax = computed(() => Math.max(8, ...week.value.map((d) => d.cards + d.quiz)))
 
-onLoad(() => {
+const newLimit = ref(20)
+const migrating = ref(false)
+
+onLoad(async () => {
+    newLimit.value = newPerDayLimit()
+    if (hasLegacyKeys()) {
+        migrating.value = true
+        await migrateLegacyLearn(store, markMigrated)
+        migrating.value = false
+    }
     loadDecks().then((list) => {
         decks.value = list
         refreshDeckStats()
@@ -129,6 +146,10 @@ onShow(() => {
     refreshDeckStats()
     refreshQuizStats()
 })
+
+function nt(d) {
+    return newTodayCount(d.id)
+}
 
 function barH(v) {
     return Math.round((v / weekMax.value) * 110) + 'rpx'
@@ -327,6 +348,20 @@ function openQuiz(b) {
 .deck-herb { background: linear-gradient(150deg, #4a6b3a, #2d4520); }
 .deck-point { background: linear-gradient(150deg, #35588b, #1e3054); }
 .deck-koujue { background: linear-gradient(150deg, #8b6f35, #54451e); }
+.deck-bingz { background: linear-gradient(150deg, #7a5a8b, #4a3060); }
+
+.mig-tip {
+    background: rgba(200, 147, 47, 0.12);
+    color: #8a6d1c;
+    font-size: 24rpx;
+    border-radius: 14rpx;
+    padding: 18rpx 24rpx;
+    margin-bottom: 20rpx;
+}
+
+.new-line {
+    color: #b3543f;
+}
 
 .deck-info {
     flex: 1;

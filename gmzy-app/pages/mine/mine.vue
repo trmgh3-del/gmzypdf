@@ -78,13 +78,34 @@
                 </view>
                 <switch :checked="night" color="#8b3a3a" @change="toggleNight" @tap.stop />
             </view>
+            <view class="set-row" @tap="pickQuota">
+                <view class="set-info">
+                    <text class="set-name">每日新卡上限</text>
+                    <text class="set-desc">当前 {{ store.settings.newPerDay || 20 }} 张/天 · 到期复习不受影响</text>
+                </view>
+                <text class="set-op">调整 ›</text>
+            </view>
+            <view class="set-row" @tap="doBackup">
+                <view class="set-info">
+                    <text class="set-name">导出备份</text>
+                    <text class="set-desc">学习记录、阅读进度、书签打包为 JSON 保存/分享</text>
+                </view>
+                <text class="set-op">导出 ›</text>
+            </view>
+            <view class="set-row" @tap="doRestore">
+                <view class="set-info">
+                    <text class="set-name">导入备份</text>
+                    <text class="set-desc">从备份 JSON 恢复，将覆盖现有学习数据</text>
+                </view>
+                <text class="set-op">导入 ›</text>
+            </view>
         </view>
         <view class="sec">
             <view class="sec-head"><text class="sec-title">关于</text></view>
             <view class="about">
                 <text class="about-title serif-font">光明中医文库·学习诊断系统</text>
                 <text class="about-line">收录光明中医函授教材 26 部，全文离线精排。</text>
-                <text class="about-line">内置记忆卡 1110 张、复习思考题 1974 题与中医辨证辅助。</text>
+                <text class="about-line">内置记忆卡 {{ CARD_NUM }} 张、复习思考题 1974 题与中医辨证辅助。</text>
                 <text class="about-line">辨证功能仅供学习参考，不能替代执业医师面诊。</text>
                 <text class="about-line">内容来源：光明中医网校（gmzy 系列教材电子化）。</text>
                 <text class="about-line">版本 v2.1.0 · 仅供学习研究使用</text>
@@ -96,7 +117,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { store, removeHistory, clearHistory, removeBookmark, clearBookmarks, setNight } from '../../common/store.js'
+import { store, removeHistory, clearHistory, removeBookmark, clearBookmarks, setNight, backupBundle, restoreBundle, newPerDayLimit } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
 import { formatTime } from '../../common/util.js'
 import BookCover from '../../components/BookCover.vue'
@@ -113,6 +134,98 @@ onShow(() => {
 function toggleNight() {
     setNight(!store.settings.night)
     applyNavTheme()
+}
+
+// 记忆卡总数（含病证卡），写死随版本更新
+const CARD_NUM = '1151'
+
+function pickQuota() {
+    const opts = [10, 20, 30, 50, 999]
+    const names = ['10 张/天', '20 张/天（默认）', '30 张/天', '50 张/天', '不设限']
+    uni.showActionSheet({
+        itemList: names,
+        success: (r) => {
+            const v = opts[r.tapIndex]
+            store.settings.newPerDay = v >= 999 ? 999 : v
+            uni.showToast({ title: '已更新', icon: 'none' })
+        }
+    })
+}
+
+function doBackup() {
+    const text = backupBundle()
+    const fname = `gmzy-backup-${new Date().toISOString().slice(0, 10)}.json`
+    // #ifdef APP-PLUS
+    try {
+        plus.io.requestFileSystem(plus.io.PUBLIC_DOCUMENTS, (fs) => {
+            fs.root.getFile(fname, { create: true }, (fe) => {
+                fe.createWriter((wr) => {
+                    wr.write(text)
+                    uni.showModal({
+                        title: '备份成功',
+                        content: `已保存到 文档/${fname}，可通过文件管理器分享`,
+                        showCancel: false
+                    })
+                })
+            })
+        })
+    } catch (e) {
+        uni.setClipboardData({ data: text })
+        uni.showToast({ title: '已复制到剪贴板', icon: 'none' })
+    }
+    // #endif
+    // #ifdef H5
+    const blob = new Blob([text], { type: 'application/json' })
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(blob)
+    a.download = fname
+    a.click()
+    URL.revokeObjectURL(a.href)
+    // #endif
+    // #ifdef MP
+    uni.setClipboardData({ data: text })
+    uni.showToast({ title: '已复制到剪贴板', icon: 'none' })
+    // #endif
+}
+
+function doRestore() {
+    uni.showModal({
+        title: '导入备份',
+        content: '将从备份文件恢复全部学习/阅读数据，并覆盖现有记录。继续吗？',
+        confirmColor: '#8b3a3a',
+        success: (r) => {
+            if (!r.confirm) return
+            // #ifdef H5
+            const input = document.createElement('input')
+            input.type = 'file'
+            input.accept = '.json,application/json'
+            input.onchange = async () => {
+                const f = input.files[0]
+                if (!f) return
+                const text = await f.text()
+                const err = restoreBundle(text)
+                uni.showToast({ title: err || '恢复成功', icon: 'none' })
+            }
+            input.click()
+            // #endif
+            // #ifdef APP-PLUS || MP
+            uni.showModal({
+                title: '导入方式',
+                content: '粘贴剪贴板中的备份内容以恢复（App 端请在文件管理器中打开备份文件并复制内容）',
+                confirmText: '粘贴恢复',
+                success: (rr) => {
+                    if (!rr.confirm) return
+                    uni.getClipboardData({
+                        success: (cd) => {
+                            const err = restoreBundle(cd.data)
+                            uni.showToast({ title: err || '恢复成功', icon: 'none' })
+                        }
+                    })
+                }
+            })
+            // #endif
+        }
+    })
 }
 
 const finishedCount = computed(() => {

@@ -21,7 +21,7 @@
 
                 <view v-if="cur" class="dict-card">
                     <view class="dc-top">
-                        <text class="dc-term serif-font">{{ cur.term }}</text>
+                        <text class="dc-term serif-font">{{ cur.front !== cur.term ? cur.front : cur.term }}</text>
                         <text class="dc-deck">{{ cur.deckName }} · {{ cur.sub }}</text>
                     </view>
                     <scroll-view scroll-y class="dc-scroll">
@@ -63,7 +63,9 @@ function close() {
 
 function goCard() {
     if (!cur.value) return
-    uni.navigateTo({ url: '/pages/cards/cards?deck=' + cur.value.deck })
+    let url = '/pages/cards/cards?deck=' + cur.value.deck
+    if (cur.value.uuid) url += '&focus=' + encodeURIComponent(cur.value.uuid)
+    uni.navigateTo({ url })
 }
 
 function goSource() {

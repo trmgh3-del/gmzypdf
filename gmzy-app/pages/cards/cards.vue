@@ -4,7 +4,7 @@
         <template v-else-if="!queue.length">
             <view class="done-all">
                 <text class="done-emoji serif-font">毕</text>
-                <text class="done-text">{{ dueMode ? '今日到期卡片已全部复习完，继续保持！' : '该筛选下没有卡片了' }}</text>
+                <text class="done-text">{{ emptyText }}</text>
                 <button v-if="!dueMode" class="btn ghost" @tap="resetFilter('all')">回到全部</button>
                 <button v-else class="btn ghost" @tap="goNormal">进入顺序学习</button>
             </view>
@@ -13,6 +13,7 @@
             <view class="topbar">
                 <text class="counter serif-font">{{ pos + 1 }} / {{ queue.length }}</text>
                 <view v-if="dueMode" class="due-tag serif-font">复习到期的 {{ queue.length }} 张</view>
+                <view v-else-if="quotaLeft >= 0" class="due-tag serif-font">今日新卡余 {{ quotaLeft }}</view>
                 <view v-else class="seg">
                     <text
                         v-for="f in FILTERS"
@@ -69,8 +70,18 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
-import { loadDecks, loadDeck } from '../../common/learn.js'
-import { setCardMastery, cardMasteryOf, cardStateRef, dueCardIds } from '../../common/store.js'
+import { loadDecks, loadDeck, migrateLegacyLearn } from '../../common/learn.js'
+import {
+    store,
+    setCardMastery,
+    cardMasteryOf,
+    cardStateRef,
+    dueCardUuids,
+    quotaRemaining,
+    newPerDayLimit,
+    hasLegacyKeys,
+    markMigrated
+} from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
 
 const FILTERS = [
@@ -92,9 +103,12 @@ const mastery = ref(0)
 const dueMode = ref(false)
 const night = ref(false)
 const touchX = ref(0)
+const quotaLeft = ref(0)
+const focusUuid = ref('')
 
 onLoad(async (q) => {
     deckId.value = q.deck || 'fangji'
+    if (hasLegacyKeys()) await migrateLegacyLearn(store, markMigrated)
     const [decks, list] = await Promise.all([loadDecks(), loadDeck(deckId.value)])
     const meta = decks.find((d) => d.id === deckId.value) || {}
     cards.value = list
@@ -103,12 +117,20 @@ onLoad(async (q) => {
         dueMode.value = true
         filter.value = 'due'
     }
+    if (q.focus) focusUuid.value = decodeURIComponent(q.focus)
     buildQueue()
     ready.value = true
 })
 
 onShow(() => {
     night.value = applyNavTheme()
+})
+
+const emptyText = computed(() => {
+    if (dueMode.value) return '今日到期卡片已全部复习完，继续保持！'
+    if (filter.value === 'all' || filter.value === 'new')
+        return `今日新卡已达上限 ${newPerDayLimit()} 张，可在"我的 → 设置"调整；到期复习不受影响`
+    return '该筛选下没有卡片了'
 })
 
 const cur = computed(() => cards.value[queue.value[pos.value]] || {})
@@ -119,22 +141,35 @@ const hasAnchor = computed(() => {
 const dueInfo = computed(() => {
     const real = queue.value[pos.value]
     if (real === undefined || !dueMode.value) return ''
-    const st = cardStateRef(deckId.value, real)
+    const st = cardStateRef(uuidOf(real))
     if (!st || !st.lv) return ''
     return ['', '尚未记住 · 今日强化', '模糊 · 间隔复习', '巩固中'][st.lv] || ''
 })
 
+function uuidOf(i) {
+    return cards.value[i]?.meta?.uuid || ''
+}
+
 function buildQueue() {
+    quotaLeft.value = quotaRemaining(deckId.value)
     let idx = cards.value.map((_, i) => i)
-    if (filter.value === 'new') idx = idx.filter((i) => !cardMasteryOf(deckId.value, i))
-    if (filter.value === 'weak') {
-        idx = idx.filter((i) => {
-            const v = cardMasteryOf(deckId.value, i)
-            return v === 1 || v === 2
-        })
-    }
     if (filter.value === 'due') {
-        idx = dueCardIds(deckId.value, cards.value.length)
+        const dueSet = new Set(dueCardUuids(deckId.value))
+        idx = idx.filter((i) => dueSet.has(uuidOf(i)))
+    } else {
+        let budget = quotaLeft.value
+        idx = idx.filter((i) => {
+            const lv = cardMasteryOf(uuidOf(i))
+            if (filter.value === 'new') {
+                if (lv) return false
+                if (budget-- > 0) return true
+                return false
+            }
+            if (filter.value === 'weak') return lv === 1 || lv === 2
+            // all：学过的全放行，未学的受新卡配额限制
+            if (lv) return true
+            return budget-- > 0
+        })
     }
     if (shuffled.value && filter.value !== 'due') {
         for (let i = idx.length - 1; i > 0; i--) {
@@ -143,13 +178,20 @@ function buildQueue() {
         }
     }
     queue.value = idx
-    if (pos.value >= idx.length) pos.value = 0
+    pos.value = 0
+    // 定位到指定卡片（查词跳转）
+    if (focusUuid.value) {
+        const fi = idx.findIndex((i) => uuidOf(i) === focusUuid.value)
+        if (fi >= 0) pos.value = fi
+        focusUuid.value = ''
+    }
     flipped.value = false
     syncMastery()
 }
 
 function syncMastery() {
-    mastery.value = cardMasteryOf(deckId.value, queue.value[pos.value] ?? -1)
+    const i = queue.value[pos.value]
+    mastery.value = i === undefined ? 0 : cardMasteryOf(uuidOf(i))
 }
 
 function flip() {
@@ -159,7 +201,8 @@ function flip() {
 function rate(level) {
     const real = queue.value[pos.value]
     if (real === undefined) return
-    setCardMastery(deckId.value, real, level)
+    setCardMastery(uuidOf(real), level)
+    quotaLeft.value = quotaRemaining(deckId.value)
     if (pos.value < queue.value.length - 1) {
         pos.value++
     } else {

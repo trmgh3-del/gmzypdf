@@ -43,6 +43,7 @@
             <view class="result-head">
                 <button class="btn ghost" @tap="step = 'pick'">‹ 重新勾选</button>
                 <text class="result-count serif-font">共 {{ results.length }} 个提示证型</text>
+                <button class="btn ghost" @tap="copyResult">复制结论</button>
             </view>
 
             <view
@@ -57,6 +58,7 @@
                         <view class="rcard-namerow">
                             <text class="rname serif-font">{{ r.name }}</text>
                             <text class="rcat">{{ r.cat }}</text>
+                            <text v-if="r.gang" class="gang">{{ r.gang }}</text>
                         </view>
                         <view class="pbar">
                             <view class="pfill" :style="{ width: r.pct + '%' }" />
@@ -83,7 +85,7 @@
                     </view>
                     <view class="rrow">
                         <text class="rkey">代表方</text>
-                        <text class="rval accent">{{ r.fang }}</text>
+                        <text class="rval accent" @tap="goFang(r)">{{ r.fang }} ›</text>
                     </view>
                     <view class="rrow">
                         <text class="rkey">参考穴</text>
@@ -133,7 +135,7 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
-import { loadDiagRules } from '../../common/learn.js'
+import { loadDiagRules, loadDeck } from '../../common/learn.js'
 import { diagnose, symptomIndex, findVs } from '../../common/diagnosis.js'
 import { store, pending, pushDiagRecord, clearDiagHistory } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'

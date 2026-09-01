@@ -37,6 +37,12 @@
                     <view class="chapter-sep">
                         <text class="chapter-sep-t">{{ chapters[ci].title }}</text>
                     </view>
+                    <view class="ch-quiz" v-if="chapQuiz(ci).length">
+                        <view v-for="qb in chapQuiz(ci)" :key="qb.f" class="ch-quiz-row" @click.stop="goQuiz(qb, ci)">
+                            <text class="ch-quiz-t">📝 本章复习思考题 {{ qb.n }} 道</text>
+                            <text class="ch-quiz-a">开始作答 ›</text>
+                        </view>
+                    </view>
                 </template>
                 <view class="load-hint" v-if="hasNext">上拉继续阅读 · {{ nextTitle }}</view>
                 <view class="load-hint load-end" v-else>— 全书完 —</view>
@@ -164,6 +170,45 @@ const percentText = computed(() => {
 const sliderActive = computed(() => (THEMES[settings.theme] || THEMES.paper).accent)
 const sliderBg = computed(() => (THEMES[settings.theme] || THEMES.paper).line)
 
+// ---- 章末复习思考题入口 ----
+const quizAll = ref([]) // [{f, book(slug), bookTitle, items:[{g,...}]}]
+
+async function ensureQuizAll() {
+    if (quizAll.value.length || quizAll.value.loading) return
+    quizAll.value.loading = true
+    try {
+        const idx = await loadQuizIndex()
+        const mine = idx.filter((b) => b.slug === slug.value)
+        const loaded = []
+        for (const b of mine) {
+            const items = await loadQuizBook(b.f)
+            loaded.push({ f: b.f, bookTitle: b.book, items })
+        }
+        quizAll.value = loaded
+    } catch (e) { /* 无题库时忽略 */ }
+}
+
+function chapQuiz(ci) {
+    const ch = chapters.value[ci]
+    if (!ch) return []
+    const out = []
+    for (const b of quizAll.value) {
+        const n = b.items.reduce(
+            (c, it) => c + (it.g !== null && it.g !== undefined && it.g >= ch.s && it.g <= ch.e ? 1 : 0),
+            0
+        )
+        if (n) out.push({ ...b, n })
+    }
+    return out
+}
+
+function goQuiz(qb, ci) {
+    const ch = chapters.value[ci]
+    uni.navigateTo({
+        url: `/pages/quiz/quiz?k=${encodeURIComponent(qb.f)}&title=${encodeURIComponent(qb.bookTitle)}&cs=${ch.s}&ce=${ch.e}&ctitle=${encodeURIComponent(ch.title)}`
+    })
+}
+
 function chapterBlocks(ci) {
     const c = chapters.value[ci]
     return book.value.blocks.slice(c.s, c.e)
@@ -179,6 +224,7 @@ async function bootstrap(slugStr, opt) {
     slug.value = slugStr
     try {
         book.value = await loadBook(slugStr)
+        ensureQuizAll()
     } catch (e) {
         showToast('书籍载入失败')
         console.error(e)
@@ -506,6 +552,30 @@ onShareAppMessage(() => {
     font-size: 22rpx;
     color: var(--muted, #8d8371);
     letter-spacing: 4rpx;
+}
+
+.ch-quiz {
+    margin: 8rpx 40rpx 48rpx;
+}
+
+.ch-quiz-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16rpx;
+    padding: 24rpx 30rpx;
+}
+
+.ch-quiz-t {
+    font-size: 27rpx;
+    color: var(--fg);
+}
+
+.ch-quiz-a {
+    font-size: 25rpx;
+    color: var(--accent);
 }
 
 .load-hint {
