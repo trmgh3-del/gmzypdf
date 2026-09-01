@@ -7,11 +7,13 @@
 - `*.pdf` — 原始 PDF 电子书
 - `md/` — 由 PDF 完整转换而来的 Markdown（书名与 PDF 一一对应）
   - `md/assets/<书名>/` — 该书配插图（封面、穴位图、示意图等）
-- `gmzy-app/` — **光明中医文库 App**（HBuilderX + UniApp Vue3 工程，
-  26 部全文离线阅读，含书架/阅读器/全文检索/书签/主题设置，详见其 README）
+- `gmzy-app/` — **光明中医文库·学习诊断系统**（HBuilderX + UniApp Vue3 工程，
+  26 部全文离线阅读 + 记忆卡/复习思考题学习系统 + 中医辨证辅助，详见其 README）
 - `tools/pdf_to_md.py` — PDF → Markdown 转换脚本
 - `tools/check_md.py` — 转换结果校验脚本（字数覆盖率、标题与图片链接检查）
 - `tools/build_app_data.py` — Markdown → App 数据包（`gmzy-app/static/`）编译脚本
+- `tools/build_learn_data.py` — 学习数据提取（记忆卡 1108 张 + 复习思考题 1958 题 →
+  `gmzy-app/static/learn/`、`gmzy-app/static/quiz/`）
 
 ## 转换特性
 

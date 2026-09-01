@@ -138,7 +138,7 @@ function percentOf(slug) {
 
 function goSearch() {
     pending.keyword = ''
-    uni.switchTab({ url: '/pages/search/search' })
+    uni.navigateTo({ url: '/pages/search/search' })
 }
 
 function goMine() {

@@ -72,10 +72,12 @@
         <view class="sec">
             <view class="sec-head"><text class="sec-title">关于</text></view>
             <view class="about">
-                <text class="about-title serif-font">光明中医文库</text>
+                <text class="about-title serif-font">光明中医文库·学习诊断系统</text>
                 <text class="about-line">收录光明中医函授教材 26 部，全文离线精排。</text>
+                <text class="about-line">内置记忆卡 1108 张、复习思考题 1958 题与中医辨证辅助。</text>
+                <text class="about-line">辨证功能仅供学习参考，不能替代执业医师面诊。</text>
                 <text class="about-line">内容来源：光明中医网校（gmzy 系列教材电子化）。</text>
-                <text class="about-line">版本 v1.0.0 · 仅供学习研究使用</text>
+                <text class="about-line">版本 v2.0.0 · 仅供学习研究使用</text>
             </view>
         </view>
     </view>

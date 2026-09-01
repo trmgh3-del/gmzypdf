@@ -11,9 +11,18 @@
             }
         },
         {
-            "path": "pages/search/search",
+            "path": "pages/learn/learn",
             "style": {
-                "navigationBarTitleText": "搜索",
+                "navigationBarTitleText": "学习",
+                "navigationBarBackgroundColor": "#5C2018",
+                "navigationBarTextStyle": "white",
+                "backgroundColor": "#F6F1E5"
+            }
+        },
+        {
+            "path": "pages/diag/diag",
+            "style": {
+                "navigationBarTitleText": "辨证",
                 "navigationBarBackgroundColor": "#5C2018",
                 "navigationBarTextStyle": "white",
                 "backgroundColor": "#F6F1E5"
@@ -23,6 +32,33 @@
             "path": "pages/mine/mine",
             "style": {
                 "navigationBarTitleText": "我的",
+                "navigationBarBackgroundColor": "#5C2018",
+                "navigationBarTextStyle": "white",
+                "backgroundColor": "#F6F1E5"
+            }
+        },
+        {
+            "path": "pages/search/search",
+            "style": {
+                "navigationBarTitleText": "搜索",
+                "navigationBarBackgroundColor": "#5C2018",
+                "navigationBarTextStyle": "white",
+                "backgroundColor": "#F6F1E5"
+            }
+        },
+        {
+            "path": "pages/cards/cards",
+            "style": {
+                "navigationBarTitleText": "记忆卡",
+                "navigationBarBackgroundColor": "#5C2018",
+                "navigationBarTextStyle": "white",
+                "backgroundColor": "#F6F1E5"
+            }
+        },
+        {
+            "path": "pages/quiz/quiz",
+            "style": {
+                "navigationBarTitleText": "复习思考题",
                 "navigationBarBackgroundColor": "#5C2018",
                 "navigationBarTextStyle": "white",
                 "backgroundColor": "#F6F1E5"
@@ -60,10 +96,16 @@
                 "selectedIconPath": "static/tabbar/book-active.png"
             },
             {
-                "pagePath": "pages/search/search",
-                "text": "搜索",
-                "iconPath": "static/tabbar/search.png",
-                "selectedIconPath": "static/tabbar/search-active.png"
+                "pagePath": "pages/learn/learn",
+                "text": "学习",
+                "iconPath": "static/tabbar/learn.png",
+                "selectedIconPath": "static/tabbar/learn-active.png"
+            },
+            {
+                "pagePath": "pages/diag/diag",
+                "text": "辨证",
+                "iconPath": "static/tabbar/diag.png",
+                "selectedIconPath": "static/tabbar/diag-active.png"
             },
             {
                 "pagePath": "pages/mine/mine",
