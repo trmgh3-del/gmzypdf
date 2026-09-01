@@ -1,2 +1,4 @@
 __pycache__/
 *.pyc
+gmzy-app/unpackage/
+node_modules/

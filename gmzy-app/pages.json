@@ -1,0 +1,76 @@
+{
+    "pages": [
+        {
+            "path": "pages/index/index",
+            "style": {
+                "navigationBarTitleText": "光明中医文库",
+                "navigationBarBackgroundColor": "#5C2018",
+                "navigationBarTextStyle": "white",
+                "backgroundColor": "#F6F1E5",
+                "enablePullDownRefresh": false
+            }
+        },
+        {
+            "path": "pages/search/search",
+            "style": {
+                "navigationBarTitleText": "搜索",
+                "navigationBarBackgroundColor": "#5C2018",
+                "navigationBarTextStyle": "white",
+                "backgroundColor": "#F6F1E5"
+            }
+        },
+        {
+            "path": "pages/mine/mine",
+            "style": {
+                "navigationBarTitleText": "我的",
+                "navigationBarBackgroundColor": "#5C2018",
+                "navigationBarTextStyle": "white",
+                "backgroundColor": "#F6F1E5"
+            }
+        },
+        {
+            "path": "pages/reader/reader",
+            "style": {
+                "navigationBarTitleText": "阅读",
+                "navigationStyle": "custom",
+                "backgroundColor": "#F6F1E5",
+                "app-plus": {
+                    "bounce": "none",
+                    "titleNView": false
+                }
+            }
+        }
+    ],
+    "globalStyle": {
+        "navigationBarTextStyle": "white",
+        "navigationBarTitleText": "光明中医文库",
+        "navigationBarBackgroundColor": "#5C2018",
+        "backgroundColor": "#F6F1E5"
+    },
+    "tabBar": {
+        "color": "#8A8F99",
+        "selectedColor": "#8B3A3A",
+        "backgroundColor": "#FBF7EC",
+        "borderStyle": "black",
+        "list": [
+            {
+                "pagePath": "pages/index/index",
+                "text": "书架",
+                "iconPath": "static/tabbar/book.png",
+                "selectedIconPath": "static/tabbar/book-active.png"
+            },
+            {
+                "pagePath": "pages/search/search",
+                "text": "搜索",
+                "iconPath": "static/tabbar/search.png",
+                "selectedIconPath": "static/tabbar/search-active.png"
+            },
+            {
+                "pagePath": "pages/mine/mine",
+                "text": "我的",
+                "iconPath": "static/tabbar/mine.png",
+                "selectedIconPath": "static/tabbar/mine-active.png"
+            }
+        ]
+    }
+}
