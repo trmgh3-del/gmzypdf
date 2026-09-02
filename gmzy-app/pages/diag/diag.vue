@@ -95,6 +95,33 @@
                         <text class="rkey">教材出处</text>
                         <text class="rval">{{ r.ref }}</text>
                     </view>
+
+                    <!-- 诊疗依据（教材原文证据链） -->
+                    <view class="rrow rev-block" v-if="r.ev && r.ev.length">
+                        <text class="rkey">诊疗依据</text>
+                        <view class="ev-list">
+                            <view v-for="(e, ei) in r.ev" :key="ei" class="ev-item" @tap="goEvidence(e)">
+                                <view class="ev-head">
+                                    <text class="ev-book">《{{ e.book.replace(/^[0-9]+/, '') }}》</text>
+                                    <text class="ev-path">{{ e.path }}</text>
+                                    <text class="ev-go">原文 ›</text>
+                                </view>
+                                <text class="ev-text">{{ e.excerpt }}</text>
+                            </view>
+                        </view>
+                    </view>
+
+                    <!-- 论治链：方 → 穴 → 案 -->
+                    <view class="rrow rchain" v-if="chainOf(r).length">
+                        <text class="rkey">论治链</text>
+                        <view class="chain-chips">
+                            <text v-for="c in chainOf(r)" :key="c.key" class="chain-chip"
+                                :class="'cc-' + c.kind" @tap="goChain(c)">
+                                {{ c.icon }} {{ c.label }}
+                            </text>
+                        </view>
+                    </view>
+
                     <view class="rgo" @tap="goSearch(r.name)">在全库检索「{{ r.name }}」原文论述 ›</view>
                 </view>
             </view>
@@ -234,6 +261,10 @@ function run() {
     const out = diagnose(Object.keys(selected), rules.value, 4)
     results.value = out.map((r) => reactive({ ...r, _open: false }))
     if (results.value.length) results.value[0]._open = true
+    // 异步构建论治链（方/穴/案），完成后页面自动刷新
+    for (const r of results.value) {
+        buildChain(r)
+    }
     // 前两名接近（分差<15%）且有人工鉴别要点时，给出鉴别提示
     compare.value = null
     if (out.length >= 2 && out[0].pct - out[1].pct < 15) {
@@ -250,6 +281,54 @@ function run() {
         })
     }
     uni.pageScrollTo({ scrollTop: 0, duration: 0 })
+}
+
+// ---- 诊疗依据跳转 ----
+function goEvidence(e) {
+    uni.navigateTo({ url: `/pages/reader/reader?slug=${e.slug}&g=${e.g}` })
+}
+
+// ---- 论治链 chips（方/穴/案 三联一键直达） ----
+let pointMap = null
+let yianByUuid = null
+
+function chainOf(r) {
+    // 模板同步渲染：读取预构建的缓存
+    return r._chain || []
+}
+
+async function buildChain(r) {
+    const out = []
+    // 方
+    if (r.fang) {
+        out.push({ kind: 'fang', icon: '📜', label: '代表方 ' + String(r.fang).split(/[，、；;]/)[0], r, key: 'fang' })
+    }
+    // 穴
+    if (!pointMap) {
+        pointMap = {}
+        for (const c of await loadDeck('point')) pointMap[c.front] = c.meta?.uuid
+    }
+    const pts = String(r.points || '').split(/[、，，]/).map((x) => x.trim()).filter(Boolean).slice(0, 3)
+    for (const pn of pts) {
+        const u = pointMap[pn]
+        if (u) out.push({ kind: 'point', icon: '📍', label: pn, uuid: u, key: 'p' + u })
+    }
+    // 案
+    if (!yianByUuid) {
+        yianByUuid = {}
+        for (const c of await loadDeck('yian')) yianByUuid[c.meta?.uuid] = c
+    }
+    for (const mu of (r.med || []).slice(0, 2)) {
+        const c = yianByUuid[mu]
+        if (c) out.push({ kind: 'yian', icon: '📖', label: c.front.replace(/案$/, ''), uuid: mu, key: 'y' + mu })
+    }
+    r._chain = out
+}
+
+function goChain(c) {
+    if (c.kind === 'fang') return goFang(c.r)
+    if (c.kind === 'point') return uni.navigateTo({ url: `/pages/cards/cards?deck=point&focus=${encodeURIComponent(c.uuid)}` })
+    if (c.kind === 'yian') return uni.navigateTo({ url: `/pages/cards/cards?deck=yian&focus=${encodeURIComponent(c.uuid)}` })
 }
 
 function goSearch(name) {
@@ -615,6 +694,48 @@ function fmt(ts) {
     border-radius: 8rpx;
     padding: 4rpx 14rpx;
 }
+
+.ev-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12rpx;
+}
+
+.ev-item {
+    background: rgba(139, 58, 58, 0.05);
+    border-left: 4rpx solid var(--accent, #8b3a3a);
+    border-radius: 10rpx;
+    padding: 14rpx 18rpx;
+}
+
+.ev-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10rpx;
+    flex-wrap: wrap;
+    margin-bottom: 6rpx;
+}
+
+.ev-book { font-size: 22rpx; color: var(--accent, #8b3a3a); font-weight: 600; }
+.ev-path { font-size: 20rpx; color: #a0916e; flex: 1; }
+.ev-go { font-size: 20rpx; color: var(--accent, #8b3a3a); }
+.ev-text { font-size: 24rpx; color: #5c5646; line-height: 1.7; }
+
+.chain-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12rpx;
+}
+
+.chain-chip {
+    font-size: 23rpx;
+    border-radius: 999rpx;
+    padding: 8rpx 20rpx;
+    background: rgba(74, 124, 89, 0.1);
+    color: #3d6248;
+}
+.chain-chip.cc-fang { background: rgba(139, 58, 58, 0.09); color: #8b3a3a; }
+.chain-chip.cc-yian { background: rgba(42, 74, 98, 0.1); color: #2a4a62; }
 
 .rgo {
     margin-top: 10rpx;

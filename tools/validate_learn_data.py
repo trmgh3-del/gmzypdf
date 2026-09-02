@@ -158,7 +158,21 @@ for v in rules.get("vs", []):
             err(f"鉴别对引用未知证型 {x}")
             bad += 1
 if not bad:
-    ok(f"规则库 {len(syn_ids)} 证型 × {len(sym_ids)} 症状引用闭合，鉴别对 {len(rules.get('vs', []))} 组")
+    ev_n = sum(1 for s in rules["syndromes"] if s.get("ev"))
+    med_n = sum(1 for s in rules["syndromes"] if s.get("med"))
+    if ev_n < len(syn_ids):
+        err(f"诊疗依据未全覆盖: 仅 {ev_n}/{len(syn_ids)}")
+    else:
+        ok(f"规则库 {len(syn_ids)} 证型 × {len(sym_ids)} 症状引用闭合，鉴别对 {len(rules.get('vs', []))} 组；诊疗依据 {ev_n} 全覆盖，医案关联 {med_n} 组")
+    # 依据锚点有效性
+    bad_ev = 0
+    for s in rules["syndromes"]:
+        for e in s.get("ev", []):
+            blks = book_blocks(e["slug"])
+            if not (0 <= e["g"] < len(blks)):
+                bad_ev += 1
+    if bad_ev:
+        err(f"诊疗依据锚点越界: {bad_ev}")
 
 print()
 if fail:
