@@ -309,6 +309,26 @@ if 'DANGER_SYNS' not in diagjs2:
     err('diagnosis.js 缺少 DANGER_SYNS')
 print(f'  随证加减 {jj_n}/45 · SVG舌脉组件齐备 · 险证/兼证/解析/历史恢复已接线')
 
+# 11) 考举枢纽（段位/弱项抽样/三科入口）
+print('\n[11] 考举·元气段位·弱项抽样')
+for key in ("step === 'hub'", 'hub-rank', 'gqRankInfo', 'yuanqi', 'goMock', 'startCase', 'startGQ',
+            'weightedSample', 'gq-weak-tag', 'gq-streak', "url: '/pages/quiz/quiz?mock=1'",
+            'bumpGqYuanqi', 'endGqStreak', 'mockLast', 'caseRate'):
+    if key not in diagvue:
+        err(f'考举枢纽缺接线：{key}')
+for key in ('GQ_RANKS', 'gqRank(', 'bumpGqYuanqi', 'endGqStreak', 'gqYuanqi'):
+    if key not in storejs:
+        err(f'store.js 缺元气系统：{key}')
+if len(diagvue.split('hub-kemu')) < 4:  # 样式定义 + 3 科卡 = 至少 4 次出现
+    err('考举三科卡片缺科')
+# GQ 段位阈值单调递增
+import re as _re2
+m = _re2.search(r'GQ_RANKS\s*=\s*\[(.*?)\n\]', storejs, _re2.S)
+th_list = [int(x) for x in _re2.findall(r"\[(\d+)\s*,", m.group(1))] if m else []
+if len(th_list) < 8 or th_list != sorted(th_list):
+    err(f'GQ_RANKS 阈值异常：{th_list}')
+print(f'  段位 {len(th_list)} 阶 · 元气系统挂载 · 弱项加权抽样 + 三科入口已接线')
+
 print()
 if fail:
     print(f'FAILED: {len(fail)} 项')

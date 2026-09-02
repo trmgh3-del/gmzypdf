@@ -62,29 +62,18 @@
                 </button>
             </view>
 
-            <!-- 医案辨证入口 -->
-            <view class="case-entry" @tap="startCase()">
+            <!-- 考举总入口（医案/图考/模考三科） -->
+            <view class="case-entry hub-entry" @tap="step = 'hub'">
                 <view class="ce-left">
-                    <text class="ce-in serif-font">🩺 医案辨证</text>
-                    <text class="ce-desc">真实医案抽考：看案选证型，每次 10 题</text>
+                    <text class="ce-in serif-font">🏮 考举 · 大试三科</text>
+                    <text class="ce-desc">医案辨证 / 图考坐堂 / 综合模考，段位元气与战绩总览</text>
                 </view>
                 <view class="ce-side">
-                    <text v-if="caseErrCount" class="ce-err" @tap.stop="startCaseErr">错 {{ caseErrCount }} ›</text>
-                    <text class="ce-op serif-font">开考 ›</text>
+                    <text v-if="yuanqi.energy" class="hub-yuan serif-font">{{ gqRankInfo.name }}</text>
+                    <text class="ce-op serif-font">入闱 ›</text>
                 </view>
             </view>
-            <text class="ce-acc" v-if="(store.learn.diagQuiz || {}).done">累计 {{ dqAcc }} 正确</text>
-
-            <!-- 图考坐堂入口 -->
-            <view class="case-entry gq-entry" @tap="startGQ">
-                <view class="ce-left">
-                    <text class="ce-in serif-font">🖼 图考坐堂</text>
-                    <text class="ce-desc">看图辨象：舌脉望诊随机抽考，每次 8 题</text>
-                </view>
-                <view class="ce-side">
-                    <text class="ce-op serif-font">开考 ›</text>
-                </view>
-            </view>
+            <text class="ce-acc" v-if="(store.learn.diagQuiz || {}).done">医案累计 {{ dqAcc }} 正确</text>
 
             <!-- 问诊引导入口 -->
             <view class="case-entry guide-entry" @tap="startGuide">
@@ -202,11 +191,13 @@
         <template v-else-if="step === 'gq'">
             <view class="case-head">
                 <button class="btn ghost" @tap="step = 'pick'">‹ 退出图考</button>
+                <text v-if="yuanqi.streak >= 2" class="gq-streak">🔥 连对 {{ yuanqi.streak }}</text>
                 <text class="case-round serif-font">对 {{ gqOk }}</text>
             </view>
             <view class="case-card gq-card">
                 <view class="case-qtag-row">
                     <text class="qtag">图考 · {{ gqCur.secName }}</text>
+                    <text v-if="gqCur.weak" class="gq-weak-tag">弱项复训</text>
                     <text class="case-seq serif-font">{{ gqPos + 1 }}/{{ gqList.length }}</text>
                 </view>
                 <view class="gq-fig">
@@ -246,6 +237,17 @@
                     <text class="co-title serif-font">本组成绩</text>
                     <text class="co-score serif-font">{{ gqOk }} / {{ gqList.length }}</text>
                     <text class="co-line">正确率 {{ Math.round((gqOk / gqList.length) * 100) }}%</text>
+                    <!-- 段位卡 -->
+                    <view class="gq-rankcard">
+                        <text class="gq-rank-name serif-font">{{ gqRankInfo.name }}</text>
+                        <view class="hr-bar">
+                            <view class="hr-fill" :style="{ width: gqRankInfo.pct + '%' }"></view>
+                        </view>
+                        <text class="gq-rank-line">
+                            元气 {{ yuanqi.energy }}{{ gqRankInfo.next ? ` · 距「${gqRankInfo.nextName}」差 ${gqRankInfo.need}` : ' · 最高段位' }}
+                        </text>
+                        <text class="gq-rank-line">当前连对 {{ yuanqi.streak }} · 佳绩 {{ yuanqi.best }}</text>
+                    </view>
                     <view v-if="gqMiss.length" class="gq-miss">
                         <text class="gq-miss-t serif-font">本组看错（已计入薄弱诊法）</text>
                         <text v-for="m in gqMiss" :key="m" class="gq-miss-item">{{ m }}</text>
@@ -253,6 +255,71 @@
                     <view class="co-btns">
                         <text class="co-btn ghost" @tap="step = 'pick'">返回辨证</text>
                         <text class="co-btn solid" @tap="startGQ">再来一组</text>
+                    </view>
+                </view>
+            </view>
+        </template>
+
+        <!-- 考举枢纽（三科总览） -->
+        <template v-else-if="step === 'hub'">
+            <view class="result-head">
+                <button class="btn ghost" @tap="step = 'pick'">‹ 返回拣证</button>
+                <text class="result-count serif-font">考举 · 三科大试</text>
+                <text class="result-count serif-font"> </text>
+            </view>
+
+            <!-- 段位卡 -->
+            <view class="hub-rank">
+                <view class="hr-top">
+                    <text class="hr-name serif-font">{{ gqRankInfo.name }}</text>
+                    <text class="hr-energy">元气 {{ yuanqi.energy }} · 连对最盛 {{ yuanqi.best }}</text>
+                </view>
+                <view class="hr-bar">
+                    <view class="hr-fill" :style="{ width: gqRankInfo.pct + '%' }"></view>
+                </view>
+                <text class="hr-next">
+                    {{ gqRankInfo.next ? `距「${gqRankInfo.nextName}」尚差元气 ${gqRankInfo.need}` : '已至最高段位' }}
+                </text>
+            </view>
+
+            <!-- 三科卡片 -->
+            <view class="hub-listed">
+                <view class="hub-kemu" @tap="startCase()">
+                    <view class="hk-head">
+                        <text class="hk-name serif-font">🩺 医案辨证</text>
+                        <text class="hk-go">赴考 ›</text>
+                    </view>
+                    <text class="hk-desc">真实医案抽考：看案选证，每次 10 题</text>
+                    <view class="hk-stats">
+                        <text class="hk-stat">累计 {{ caseQuiz.done }} 题 · 对 {{ caseQuiz.ok }}</text>
+                        <text class="hk-stat" v-if="caseQuiz.done">正确率 {{ caseRate }}%</text>
+                        <text class="hk-stat miss" v-if="caseErrCount">错题 {{ caseErrCount }}</text>
+                    </view>
+                </view>
+
+                <view class="hub-kemu" @tap="startGQ">
+                    <view class="hk-head">
+                        <text class="hk-name serif-font">🖼 图考坐堂</text>
+                        <text class="hk-go">赴考 ›</text>
+                    </view>
+                    <text class="hk-desc">看图辨象：舌脉望图随机抽考，每次 8 题 · 弱项优先复训</text>
+                    <view class="hk-stats">
+                        <text class="hk-stat">段位 {{ gqRankInfo.name }}</text>
+                        <text class="hk-stat">当前连对 {{ yuanqi.streak }}</text>
+                        <text class="hk-stat miss" v-if="ledgerTotal.no">弱项错题 {{ ledgerTotal.no }}</text>
+                    </view>
+                </view>
+
+                <view class="hub-kemu" @tap="goMock">
+                    <view class="hk-head">
+                        <text class="hk-name serif-font">📜 综合模考</text>
+                        <text class="hk-go">赴考 ›</text>
+                    </view>
+                    <text class="hk-desc">跨书混编限时考：全库抽题、交卷即判</text>
+                    <view class="hk-stats">
+                        <text class="hk-stat">共赴 {{ mockCount }} 次</text>
+                        <text class="hk-stat" v-if="mockLast">最近 {{ mockLast.n }} 题答出 {{ mockLast.k }}（{{ mockRate }}%）</text>
+                        <text class="hk-stat" v-if="mockLast">用时 {{ mockUsedStr }}</text>
                     </view>
                 </view>
             </view>
@@ -487,7 +554,7 @@ import { ref, reactive, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { loadDiagRules, loadDeck, loadDiagAtlas, loadDiagQuiz, loadDiagGuide } from '../../common/learn.js'
 import { diagnose, symptomIndex, findVs, RED_FLAGS, DANGER_SYNS } from '../../common/diagnosis.js'
-import { store, pending, pushDiagRecord, clearDiagHistory, pushDiagQuiz, quizMistakes, setQuizAnswer, bumpAtlasStat, clearAtlasStats } from '../../common/store.js'
+import { store, pending, pushDiagRecord, clearDiagHistory, pushDiagQuiz, quizMistakes, setQuizAnswer, bumpAtlasStat, clearAtlasStats, bumpGqYuanqi, endGqStreak, gqRank } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
 import TongueSvg from '../../components/TongueSvg.vue'
 import PulseSvg from '../../components/PulseSvg.vue'
@@ -718,14 +785,42 @@ async function startGQ() {
             return
         }
     }
-    const pool = shuffleArr(gqPoolNow())
-    gqList.value = pool.slice(0, GQ_N)
+    const pool = gqPoolNow()
+    const st = (store.learn && store.learn.atlasStats) || {}
+    // 弱项优先：错>对 的词条权重拉高（1 + 4×净错 + 0.5×错次），无记录者等权 1
+    gqList.value = weightedSample(pool, GQ_N, (it) => {
+        const v = st[it.term] || {}
+        const weak = Math.max(0, (v.gqNo || 0) - (v.gqOk || 0))
+        const w = 1 + 4 * weak + 0.5 * (v.gqNo || 0)
+        return w
+    })
     gqOk.value = 0
     gqDone.value = false
     gqMiss.value = []
     gqPos.value = 0
     makeGQ()
     step.value = 'gq'
+}
+
+// 不放回加权抽样
+function weightedSample(pool, n, weightOf) {
+    const items = pool.map((it) => ({ it, w: Math.max(0.01, weightOf(it)) }))
+    const out = []
+    while (out.length < n && items.length) {
+        const total = items.reduce((s, x) => s + x.w, 0)
+        let r = Math.random() * total
+        let idx = items.length - 1
+        for (let i = 0; i < items.length; i++) {
+            r -= items[i].w
+            if (r <= 0) {
+                idx = i
+                break
+            }
+        }
+        const picked = items.splice(idx, 1)[0]
+        out.push(Object.assign(picked.it, { weak: picked.w > 1 }))
+    }
+    return out
 }
 
 function makeGQ() {
@@ -743,10 +838,33 @@ function pickGQ(c) {
     if (c === cur.term) {
         gqOk.value++
         bumpAtlasStat(cur.term, 'gqOk')
+        const { streak, bonus } = bumpGqYuanqi()
+        if (bonus) uni.showToast({ icon: 'none', title: `🔥 连对 ${streak} · 元气 +${bonus}` })
     } else {
+        const hadStreak = (store.learn.gqYuanqi || {}).streak > 0
         gqMiss.value.push(cur.term)
         bumpAtlasStat(cur.term, 'gqNo')
+        endGqStreak()
+        if (hadStreak) uni.showToast({ icon: 'none', title: '连对中断 · 从头荟元' })
     }
+}
+
+// ---- 考举枢纽数据 ----
+const yuanqi = computed(() => (store.learn.gqYuanqi || { energy: 0, streak: 0, best: 0 }))
+const gqRankInfo = computed(() => gqRank(yuanqi.value.energy))
+const caseQuiz = computed(() => (store.learn.diagQuiz || { done: 0, ok: 0 }))
+const caseRate = computed(() => (caseQuiz.value.done ? Math.round((caseQuiz.value.ok / caseQuiz.value.done) * 100) : 0))
+const mockHist = computed(() => store.learn.mockHistory || [])
+const mockCount = computed(() => mockHist.value.length)
+const mockLast = computed(() => mockHist.value[0] || null)
+const mockRate = computed(() => (mockLast.value && mockLast.value.n ? Math.round((mockLast.value.k / mockLast.value.n) * 100) : 0))
+const mockUsedStr = computed(() => {
+    const s = mockLast.value ? mockLast.value.s || 0 : 0
+    return `${Math.floor(s / 60)} 分 ${s % 60} 秒`
+})
+
+function goMock() {
+    uni.navigateTo({ url: '/pages/quiz/quiz?mock=1' })
 }
 
 function nextGQ() {
@@ -1880,6 +1998,170 @@ function fmt(ts) {
 .atlas-tip-strong {
     color: #a8642f;
     font-weight: 700;
+}
+
+/* ===== 考举枢纽 ===== */
+.hub-entry {
+    background: linear-gradient(135deg, #f7ecd8, #f6e3cc);
+    border: 1px solid rgba(181, 147, 90, 0.5) !important;
+}
+
+.hub-yuan {
+    font-size: 22rpx;
+    color: #8b3a3a;
+    background: rgba(139, 58, 58, 0.1);
+    border-radius: 999rpx;
+    padding: 6rpx 18rpx;
+}
+
+.hub-rank {
+    background: linear-gradient(135deg, #fdf4e0, #f8ebcf);
+    border: 1px solid rgba(181, 147, 90, 0.55);
+    border-radius: 18rpx;
+    padding: 26rpx 28rpx 22rpx;
+    margin-bottom: 22rpx;
+}
+
+.hr-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 14rpx;
+}
+
+.hr-name {
+    font-size: 36rpx;
+    font-weight: 700;
+    color: #5c2018;
+    letter-spacing: 4rpx;
+}
+
+.hr-energy {
+    font-size: 22rpx;
+    color: #8d6244;
+}
+
+.hr-bar {
+    height: 14rpx;
+    background: rgba(181, 147, 90, 0.25);
+    border-radius: 999rpx;
+    overflow: hidden;
+}
+
+.hr-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #b5935a, #8b3a3a);
+    border-radius: 999rpx;
+    transition: width 0.4s ease;
+}
+
+.hr-next {
+    display: block;
+    font-size: 21rpx;
+    color: #a08c68;
+    margin-top: 10rpx;
+}
+
+.hub-listed {
+    display: flex;
+    flex-direction: column;
+    gap: 18rpx;
+}
+
+.hub-kemu {
+    background: #fffdf5;
+    border: 1px solid rgba(139, 58, 58, 0.14);
+    border-radius: 16rpx;
+    padding: 22rpx 24rpx;
+}
+
+.hk-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8rpx;
+}
+
+.hk-name {
+    font-size: 30rpx;
+    font-weight: 700;
+    color: #5c2018;
+}
+
+.hk-go {
+    font-size: 24rpx;
+    color: #8b3a3a;
+}
+
+.hk-desc {
+    display: block;
+    font-size: 23rpx;
+    color: #6b5d4f;
+    line-height: 1.7;
+}
+
+.hk-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10rpx;
+    margin-top: 12rpx;
+}
+
+.hk-stat {
+    font-size: 21rpx;
+    color: #8d8371;
+    background: rgba(181, 147, 90, 0.12);
+    border-radius: 8rpx;
+    padding: 4rpx 12rpx;
+}
+
+.hk-stat.miss {
+    color: #b5242a;
+    background: rgba(181, 36, 42, 0.08);
+}
+
+/* 图考内连对/弱项徽章 */
+.gq-streak {
+    font-size: 22rpx;
+    color: #d4622a;
+    background: rgba(212, 98, 42, 0.12);
+    border-radius: 999rpx;
+    padding: 6rpx 16rpx;
+}
+
+.gq-weak-tag {
+    font-size: 20rpx;
+    color: #fffdf7;
+    background: #a8642f;
+    border-radius: 8rpx;
+    padding: 3rpx 10rpx;
+    margin-left: 10rpx;
+}
+
+.gq-rankcard {
+    width: 100%;
+    text-align: left;
+    background: linear-gradient(135deg, #fdf4e0, #f8ebcf);
+    border: 1px solid rgba(181, 147, 90, 0.55);
+    border-radius: 14rpx;
+    padding: 18rpx 20rpx;
+    margin-top: 18rpx;
+}
+
+.gq-rank-name {
+    display: block;
+    font-size: 30rpx;
+    font-weight: 700;
+    color: #5c2018;
+    letter-spacing: 3rpx;
+    margin-bottom: 10rpx;
+}
+
+.gq-rank-line {
+    display: block;
+    font-size: 21rpx;
+    color: #8d6244;
+    margin-top: 8rpx;
 }
 
 /* ===== 图谱原文卡（长按） ===== */

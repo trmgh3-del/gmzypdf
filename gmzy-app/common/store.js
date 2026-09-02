@@ -48,7 +48,9 @@ const defaults = {
         // 医案辨题记分: { done, ok }
         diagQuiz: { done: 0, ok: 0 },
         // 诊法图谱账本: { 术语: { see 查原文, gqOk 图考对, gqNo 图考错 } }
-        atlasStats: {}
+        atlasStats: {},
+        // 图考元气系统: { energy 元气值, streak 当前连对, best 历史最佳连对 }
+        gqYuanqi: { energy: 0, streak: 0, best: 0 }
     }
 }
 
@@ -76,6 +78,7 @@ function loadInitial() {
                 if (Array.isArray(L.mockHistory)) init.learn.mockHistory = L.mockHistory
                 if (L.diagQuiz) init.learn.diagQuiz = Object.assign({ done: 0, ok: 0 }, L.diagQuiz)
                 if (L.atlasStats && typeof L.atlasStats === 'object') init.learn.atlasStats = L.atlasStats
+                if (L.gqYuanqi) init.learn.gqYuanqi = Object.assign({ energy: 0, streak: 0, best: 0 }, L.gqYuanqi)
             }
         }
     } catch (e) {
@@ -373,6 +376,49 @@ export function bumpAtlasStat(term, field) {
 
 export function clearAtlasStats() {
     store.learn.atlasStats = {}
+}
+
+// ---- 图考元气/段位 ----
+// [元气阈值, 段位名]（由低到高）
+export const GQ_RANKS = [
+    [0, '蕴元初萌'],
+    [12, '指下初明'],
+    [32, '识象见长'],
+    [72, '舌海初渡'],
+    [132, '脉理渐通'],
+    [220, '望闻入微'],
+    [340, '辨证成章'],
+    [500, '坐堂未久'],
+    [720, '国医气度']
+]
+
+// energy → { idx, name, next(下一段阈值|null), nextName, need(还差), pct }
+export function gqRank(energy) {
+    const e = Math.max(0, energy | 0)
+    let idx = 0
+    for (let i = 0; i < GQ_RANKS.length; i++) if (e >= GQ_RANKS[i][0]) idx = i
+    const cur = GQ_RANKS[idx]
+    const nxt = GQ_RANKS[idx + 1] || null
+    const need = nxt ? nxt[0] - e : 0
+    const pct = nxt ? Math.round(((e - cur[0]) / (nxt[0] - cur[0])) * 100) : 100
+    return { idx, name: cur[1], energy: e, next: nxt ? nxt[0] : null, nextName: nxt ? nxt[1] : null, need, pct }
+}
+
+// 图考答对：元气+1；每 5 连对再赏 +2；连对中断不清元气
+export function bumpGqYuanqi() {
+    const y = store.learn.gqYuanqi || (store.learn.gqYuanqi = { energy: 0, streak: 0, best: 0 })
+    y.streak++
+    if (y.streak > y.best) y.best = y.streak
+    y.energy += 1
+    const bonus = y.streak % 5 === 0 ? 2 : 0
+    if (bonus) y.energy += bonus
+    return { streak: y.streak, bonus }
+}
+
+// 图考答错：连对清零（元气不伤）
+export function endGqStreak() {
+    const y = store.learn.gqYuanqi || (store.learn.gqYuanqi = { energy: 0, streak: 0, best: 0 })
+    y.streak = 0
 }
 
 // ---- 学习总览 ----
