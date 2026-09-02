@@ -13,6 +13,7 @@ const defaults = {
         serif: true,
         night: false,          // 全局夜间模式
         nightTheme: 'warm',  // 夜间配色：warm 暖金 / slate 青灰 / amber 暖棕
+        remind: 20,        // 学习提醒小时：-1=关 7=早7点 20=晚8点 21=晚9点
     },
     // 每本书的阅读进度: { slug: { chIdx, scrollTop, gIdx, percent, ts } }
     progress: {},

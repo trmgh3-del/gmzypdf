@@ -104,6 +104,13 @@
                         :style="{ background: t.c1, borderColor: t.c2 }" />
                 </view>
             </view>
+            <view class="set-row" @tap="pickRemind">
+                <view class="set-info">
+                    <text class="set-name">学习提醒</text>
+                    <text class="set-desc">当前：{{ remindName }} · 本地定时，不联网不耗电</text>
+                </view>
+                <text class="set-op">调整 ›</text>
+            </view>
             <view class="set-row" @tap="pickQuota">
                 <view class="set-info">
                     <text class="set-name">每日新卡上限</text>
@@ -145,6 +152,7 @@ import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { store, removeHistory, clearHistory, removeBookmark, clearBookmarks, setNight, backupBundle, restoreBundle, newPerDayLimit } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
+import { setRemindHour } from '../../common/remind.js'
 import { formatTime } from '../../common/util.js'
 import BookCover from '../../components/BookCover.vue'
 
@@ -157,6 +165,21 @@ onShow(() => {
     tick.value++
     applyNavTheme()
 })
+
+const remindName = computed(() => ({
+    '-1': '关闭', '7': '每天 7:00', '20': '每天 20:00', '21': '每天 21:00'
+})[String(store.settings.remind ?? 20)])
+
+function pickRemind() {
+    uni.showActionSheet({
+        itemList: ['每天 7:00', '每天 20:00（默认）', '每天 21:00', '关闭提醒'],
+        success: (r) => {
+            const vals = [7, 20, 21, -1]
+            setRemindHour(vals[r.tapIndex])
+            uni.showToast({ title: '已更新', icon: 'none' })
+        }
+    })
+}
 
 const NIGHT_THEMES = [
     { id: 'warm', name: '暖金', c1: 'linear-gradient(135deg,#25211a,#d8b98a)' , c2: '#d8b98a'},
@@ -182,7 +205,7 @@ function toggleNight() {
 }
 
 // 记忆卡总数（含病证卡），写死随版本更新
-const CARD_NUM = '1794'
+const CARD_NUM = '1795'
 
 function pickQuota() {
     const opts = [10, 20, 30, 50, 999]

@@ -14,6 +14,10 @@
                 <text class="counter serif-font">{{ pos + 1 }} / {{ queue.length }}</text>
                 <view v-if="dueMode" class="due-tag serif-font">复习到期的 {{ queue.length }} 张</view>
                 <view v-else-if="quotaLeft >= 0" class="due-tag serif-font">今日新卡余 {{ quotaLeft }}</view>
+                <text class="tts-btn" v-if="cur.front && !isKoujue" @tap.stop="readAloud">🔊 朗读</text>
+                <text class="tts-btn" v-if="isKoujue" @tap.stop="toggleContinuous">
+                    {{ ttsPlaying ? '⏹ 停止' : '🔊 连读' }}
+                </text>
                 <view v-else class="seg">
                     <text
                         v-for="f in FILTERS"
@@ -86,6 +90,7 @@ import {
     markMigrated
 } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
+import { speak, stopSpeak, speakQueue, state as ttsState } from '../../common/tts.js'
 
 const FILTERS = [
     { key: 'all', name: '全部' },
@@ -107,6 +112,52 @@ const dueMode = ref(false)
 const night = ref(false)
 const themeCls = computed(() => 'night-theme-' + (store.settings.nightTheme || 'warm'))
 const touchX = ref(0)
+const ttsBuilding = ref(false)
+const ttsPlaying = ref(false)
+
+function readAloud() {
+    const c = cur.value
+    if (!c.front) return
+    const text = flipped.value
+        ? `${c.front}。${String(c.back || '').replace(/[【】]/g, '，')}`
+        : c.front
+    if (!speak(text)) {
+        uni.showToast({ title: '当前环境不支持朗读', icon: 'none' })
+    }
+}
+
+const isKoujue = computed(() => deckId.value === 'koujue')
+
+function toggleContinuous() {
+    if (ttsPlaying.value) {
+        stopSpeak()
+        ttsPlaying.value = false
+        return
+    }
+    if (!queue.value.length) return
+    // 从当前卡开始连读 20 张
+    const arr = queue.value.slice(pos.value, pos.value + 20).map((i) => {
+        const c = cards.value[i]
+        return `${c.front}。${String(c.back || '').split('\n').join('，').replace(/[【】]/g, '，')}`
+    })
+    uni.showToast({ title: '开始连读 ' + arr.length + ' 张', icon: 'none' })
+    const ok = speakQueue(arr, {
+        gapMs: 600,
+        onEach: (_t, idxInPlayed) => {
+            // 轮播到即将播的卡
+            pos.value += 1
+            if (pos.value >= queue.value.length) pos.value = 0
+            flipped.value = false
+            syncMastery()
+        },
+        onDone: () => { ttsPlaying.value = false }
+    })
+    if (!ok) {
+        uni.showToast({ title: '当前环境不支持朗读', icon: 'none' })
+    } else {
+        ttsPlaying.value = true
+    }
+}
 const quotaLeft = ref(0)
 const focusUuid = ref('')
 
@@ -453,6 +504,15 @@ function te(e) {
     color: #5c2018;
     font-weight: 600;
     width: 150rpx;
+}
+
+.tts-btn {
+    font-size: 24rpx;
+    color: #8a5a2c;
+    background: rgba(200, 152, 74, 0.16);
+    border-radius: 999rpx;
+    padding: 8rpx 18rpx;
+    margin-left: 12rpx;
 }
 
 .due-tag {

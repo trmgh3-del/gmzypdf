@@ -1,7 +1,14 @@
 <script>
+import { scheduleAppReminder } from './common/remind.js'
+import { runSelfCheck } from './common/selfcheck.js'
 export default {
     onLaunch() {
         // 应用启动：状态在 common/store.js 中惰性恢复
+        // 排程本地学习提醒（APP-PLUS 才执行，H5 在 home 页退化处理）
+        setTimeout(() => {
+            try { scheduleAppReminder() } catch (e) { /* 忽略 */ }
+            try { runSelfCheck() } catch (e) { /* 忽略 */ }
+        }, 1200)
         // #ifdef H5
         // H5 离线缓存：注册数据目录 Service Worker（生产构建才启用）
         if (typeof window !== 'undefined' && 'serviceWorker' in navigator && location.hostname !== 'localhost') {
@@ -20,6 +27,17 @@ export default {
         // #endif
     },
     onShow() {},
+    onError(err) {
+        console.error('[AppError]', err)
+        try {
+            plus.nativeUI && false // 仅 APP-PLUS 有 nativeUI
+            uni.showToast({
+                title: '页面出现异常，已记录',
+                icon: 'none',
+                duration: 1800
+            })
+        } catch (e) { /* noop */ }
+    },
     onHide() {}
 }
 </script>

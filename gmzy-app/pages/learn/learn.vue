@@ -137,6 +137,7 @@ import {
     markMigrated
 } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
+import { maybeToastH5Reminder } from '../../common/remind.js'
 
 const decks = ref([])
 const quizBooks = ref([])
@@ -193,6 +194,7 @@ onLoad(async () => {
 onShow(() => {
     night.value = applyNavTheme()
     wa.value = weeklyCompare()
+    maybeToastH5Reminder()
     Object.assign(ov, learnOverview())
     week.value = weekSeries()
     refreshDeckStats()
