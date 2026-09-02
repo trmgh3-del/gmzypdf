@@ -63,12 +63,15 @@
             </view>
 
             <!-- 医案辨证入口 -->
-            <view class="case-entry" @tap="startCase">
+            <view class="case-entry" @tap="startCase()">
                 <view class="ce-left">
                     <text class="ce-in serif-font">🩺 医案辨证</text>
                     <text class="ce-desc">真实医案抽考：看案选证型，每次 10 题</text>
                 </view>
-                <text class="ce-op serif-font">开考 ›</text>
+                <view class="ce-side">
+                    <text v-if="caseErrCount" class="ce-err" @tap.stop="startCaseErr">错 {{ caseErrCount }} ›</text>
+                    <text class="ce-op serif-font">开考 ›</text>
+                </view>
             </view>
             <text class="ce-acc" v-if="(store.learn.diagQuiz || {}).done">累计 {{ dqAcc }} 正确</text>
 
@@ -110,7 +113,7 @@
             <view v-else class="gqa">
                 <view class="gqa-head">
                     <text class="gqa-track serif-font">{{ gTrack.icon }} {{ gTrack.name }}</text>
-                    <text class="gqa-prog serif-font">第 {{ gStepIdx + 1 }} / {{ gTrack.steps.length }} 问</text>
+                    <text class="gqa-prog serif-font">已答 {{ gAnswerNum }} 问</text>
                 </view>
                 <view class="gqa-bar"><view class="gqa-fill" :style="{ width: gProgPct + '%' }" /></view>
                 <view class="gqa-card">
@@ -328,7 +331,7 @@ import { ref, reactive, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { loadDiagRules, loadDeck, loadDiagAtlas, loadDiagQuiz, loadDiagGuide } from '../../common/learn.js'
 import { diagnose, symptomIndex, findVs, RED_FLAGS } from '../../common/diagnosis.js'
-import { store, pending, pushDiagRecord, clearDiagHistory, pushDiagQuiz } from '../../common/store.js'
+import { store, pending, pushDiagRecord, clearDiagHistory, pushDiagQuiz, quizMistakes, setQuizAnswer } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
 
 const DEFAULT_DISCLAIMER = '本功能仅供学习辨证思路参考，不能替代执业医师面诊，如有不适请及时就医。'
@@ -485,9 +488,20 @@ const dqAcc = computed(() => {
     return `${d.ok}/${d.done}`
 })
 
-async function startCase() {
+// 医案考错题包：连错 2 次入包，连对 3 次释放（复用题库错题机制，归入每日答题曲线）
+const caseErrCount = computed(() => quizMistakes('_diag_').length)
+
+async function startCase(errOnly) {
     const quiz = await loadDiagQuiz()
-    const arr = quiz.items.slice()
+    let arr = quiz.items.slice()
+    if (errOnly) {
+        const wrong = new Set(quizMistakes('_diag_'))
+        arr = arr.filter((it) => wrong.has(it.u))
+        if (!arr.length) {
+            uni.showToast({ title: '错题已清空，从全部抽考', icon: 'none' })
+            arr = quiz.items.slice()
+        }
+    }
     for (let i = arr.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1))
         const t = arr[i]
@@ -503,6 +517,10 @@ async function startCase() {
     uni.pageScrollTo({ scrollTop: 0, duration: 0 })
 }
 
+function startCaseErr() {
+    startCase(true)
+}
+
 // ---- 问诊引导 ----
 const guides = ref([])
 const gPhase = ref('list') // list 主诉 | qa 分步
@@ -514,9 +532,28 @@ const gStep = computed(() => {
     const t = gTrack.value
     return t && t.steps[gStepIdx.value] ? t.steps[gStepIdx.value] : { q: '', opts: [] }
 })
-const gProgPct = computed(() =>
-    gTrack.value ? Math.round(((gStepIdx.value + 1) / gTrack.value.steps.length) * 100) : 0
-)
+const gProgPct = computed(() => {
+    if (!gTrack.value) return 0
+    const done = gLog.value.filter((l) => !l.base).length
+    return Math.min(100, Math.round((done / Math.max(1, gTrack.value.steps.length)) * 100))
+})
+const gAnswerNum = computed(() => gLog.value.filter((l) => !l.base).length)
+
+// 分支解析：选项 goto > 步骤 next > 线性下一问 > 结束
+function resolveNext(curIdx, step, opt) {
+    const steps = gTrack.value.steps
+    const byId = (id) => steps.findIndex((s) => s.id === id)
+    if (opt && opt.goto) {
+        const j = byId(opt.goto)
+        return j >= 0 ? j : -1
+    }
+    if (step.next) {
+        const j = byId(step.next)
+        return j >= 0 ? j : -1
+    }
+    if (step.id) return -1 // 编号步骤无 next → 问诊结束
+    return curIdx + 1 < steps.length ? curIdx + 1 : -1
+}
 
 async function startGuide() {
     const g = await loadDiagGuide()
@@ -534,7 +571,7 @@ function pickTrack(tr) {
     const base = (tr.base || []).slice()
     if (base.length) {
         base.forEach((id) => { selected[id] = true })
-        gLog.value.push({ ids: base })
+        gLog.value.push({ ids: base, base: true, prevIdx: 0 })
     }
     gPhase.value = 'qa'
 }
@@ -542,33 +579,35 @@ function pickTrack(tr) {
 function chooseOpt(o) {
     const ids = (o.add || []).slice()
     ids.forEach((id) => { selected[id] = true })
-    gLog.value.push({ ids })
-    gAdvance()
+    const cur = gStepIdx.value
+    gLog.value.push({ ids, prevIdx: cur })
+    gAdvance(resolveNext(cur, gStep.value, o))
 }
 
 function gSkip() {
-    gLog.value.push({ ids: [] })
-    gAdvance()
+    const cur = gStepIdx.value
+    gLog.value.push({ ids: [], prevIdx: cur })
+    gAdvance(resolveNext(cur, gStep.value, null))
 }
 
-function gAdvance() {
-    if (gStepIdx.value + 1 >= gTrack.value.steps.length) {
+function gAdvance(nextIdx) {
+    if (nextIdx < 0 || nextIdx === null) {
         finishGuide()
         return
     }
-    gStepIdx.value++
+    gStepIdx.value = nextIdx
     uni.pageScrollTo({ scrollTop: 0, duration: 0 })
 }
 
 function gBack() {
-    const last = gLog.value.pop() || { ids: [] }
+    const last = gLog.value.pop() || { ids: [], prevIdx: gStepIdx.value - 1 }
     const remain = new Set()
     gLog.value.forEach((l) => l.ids.forEach((id) => remain.add(id)))
     ;(last.ids || []).forEach((id) => {
         if (!remain.has(id)) delete selected[id]
     })
-    if (gStepIdx.value > 0) gStepIdx.value--
-    else finishGuideCancel()
+    if (last.base || gStepIdx.value <= 0) finishGuideCancel()
+    else gStepIdx.value = Math.max(0, last.prevIdx)
 }
 
 function finishGuideCancel() {
@@ -592,6 +631,7 @@ function pickCase(c) {
     const ok = c === caseCur.value.an
     if (ok) caseOk.value++
     pushDiagQuiz(ok)
+    if (caseCur.value.u) setQuizAnswer('_diag_', caseCur.value.u, ok)
 }
 
 function nextCase() {
@@ -1241,6 +1281,14 @@ function fmt(ts) {
 }
 
 .ce-in { font-size: 30rpx; color: #5c2018; font-weight: 700; }
+.ce-side { display: flex; flex-direction: row; align-items: center; gap: 16rpx; }
+.ce-err {
+    font-size: 22rpx;
+    color: #b5242a;
+    border: 1rpx solid rgba(181, 36, 42, 0.4);
+    border-radius: 16rpx;
+    padding: 6rpx 16rpx;
+}
 .ce-desc { font-size: 22rpx; color: #8d8371; margin-top: 6rpx; }
 .ce-op { font-size: 26rpx; color: #8b3a3a; }
 .ce-acc { font-size: 21rpx; color: #a39880; text-align: right; margin-top: 8rpx; display: block; }

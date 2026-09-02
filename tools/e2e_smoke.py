@@ -165,8 +165,8 @@ if 'against' not in diagjs or 'RED_FLAGS' not in diagjs:
     err('diagnosis.js 缺少反证/红旗')
 print(f'  鉴别 {len(vs)} 对 · 反证 {len(neg)} 条 · 医案 {med_n}/45 · 看案辨证 {len(dq.get("items", []))} 题零泄题')
 
-# 9) 问诊引导轨道
-print('\n[9] 问诊引导')
+# 9) 问诊引导轨道（含分支）
+print('\n[9] 问诊引导与医案错题')
 guide = load('diag', 'guide.json')
 tracks = guide.get('tracks', [])
 sym_all = {it['id'] for g in rules['groups'] for it in g['items']}
@@ -174,26 +174,43 @@ if len(tracks) < 8:
     err(f'问诊轨道 {len(tracks)} < 8')
 n_step = 0
 bad_ref = None
+n_branch = 0
 for tr in tracks:
     for sid in tr.get('base', []):
         if sid not in sym_all:
             bad_ref = f'{tr["id"]}.base/{sid}'
+    idset = {s.get('id') for s in tr.get('steps', []) if s.get('id')}
     for st in tr.get('steps', []):
         n_step += 1
+        if st.get('next'):
+            n_branch += 1
+            if st['next'] not in idset:
+                bad_ref = f"{tr['id']}.next/{st['next']}"
         for o in st.get('opts', []):
+            if o.get('goto'):
+                n_branch += 1
+                if o['goto'] not in idset:
+                    bad_ref = f"{tr['id']}/{st.get('id', st['q'][:8])}.goto/{o['goto']}"
             for sid in o.get('add', []):
                 if sid not in sym_all:
                     bad_ref = f"{tr['id']}/{st['q'][:8]}/{sid}"
 if bad_ref:
     err(f'问诊轨道引用越界 {bad_ref}')
-if n_step < 35:
-    err(f'问诊步骤仅 {n_step} < 35')
-for key in ('startGuide', 'pickTrack', 'chooseOpt', 'gBack', 'finishGuide', 'loadDiagGuide'):
-    if key not in diagvue and key != 'loadDiagGuide':
-        err(f'diag.vue 缺少问诊引导 {key}')
+if n_step < 40:
+    err(f'问诊步骤仅 {n_step} < 40')
+if n_branch < 15:
+    err(f'问诊分支仅 {n_branch} < 15（分支加深未生效）')
+for key in ('startGuide', 'pickTrack', 'chooseOpt', 'gBack', 'finishGuide', 'resolveNext',
+            'startCaseErr', "quizMistakes('_diag_'", "setQuizAnswer('_diag_'"):
+    if key not in diagvue:
+        err(f'diag.vue 缺少 {key}')
 if 'loadDiagGuide' not in open(os.path.join(APP, 'common/learn.js'), encoding='utf-8').read():
     err('learn.js 缺少 loadDiagGuide')
-print(f'  问诊轨道 {len(tracks)} 条 · {n_step} 问，引用全部闭合')
+# 医案考 stable id（错题包赖以持久）
+items = dq.get('items', [])
+if any('u' not in it or not str(it['u']).startswith('dq:') for it in items):
+    err('看案辨证题库缺稳定题号 u')
+print(f'  问诊轨道 {len(tracks)} 条 · {n_step} 问 · 分支 {n_branch} 处 · 医案错题回看已接线')
 
 print()
 if fail:

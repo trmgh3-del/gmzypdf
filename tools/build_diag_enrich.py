@@ -205,7 +205,7 @@ for z in rules['syndromes']:
     distract = (same + others)[:3]
     choices = [{'id': sid, 'name': z['name']}] + [{'id': d['id'], 'name': d['name']} for d in distract]
     random.shuffle(choices)
-    quiz.append({'q': q, 'a': sid, 'an': z['name'], 'src': src,
+    quiz.append({'u': f"dq:{len(quiz)}", 'q': q, 'a': sid, 'an': z['name'], 'src': src,
                  'choices': [c['name'] for c in choices]})
 
 json.dump({'version': rules['version'], 'count': len(quiz), 'items': quiz},
