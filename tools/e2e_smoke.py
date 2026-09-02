@@ -76,11 +76,43 @@ for z in rules['syndromes']:
             err(f'证型 {z["id"]} 引用症状 {k} 不存在')
 print(f'  规则 {len(rules["syndromes"])} 证型 依据 {assert_ev} 医案 {sum(1 for z in rules["syndromes"] if z.get("med"))}')
 
-# ---- 4 舌脉图册 ----
+# ---- 4 舌脉望诊图册（细分） ----
 atlas = load('diag', 'atlas.json')
-if len(atlas.get('tongue', [])) < 10 or len(atlas.get('pulse', [])) < 10:
-    err('舌脉图册不足')
-print(f'  舌脉图册 {len(atlas["tongue"])}舌 + {len(atlas["pulse"])}脉')
+t_list, p_list, w_list = atlas.get('tongue', []), atlas.get('pulse', []), atlas.get('wang', [])
+if len(t_list) < 26:
+    err(f'舌象图谱仅 {len(t_list)} < 26（细分未生效）')
+if len(p_list) < 20:
+    err(f'脉象图谱仅 {len(p_list)} < 20')
+if len(w_list) < 14:
+    err(f'望诊图卡仅 {len(w_list)} < 14')
+for sec, lst in (('tongue', t_list), ('pulse', p_list), ('wang', w_list)):
+    for it in lst:
+        if not it.get('grp'):
+            err(f'{sec} 词条缺分组 grp：{it["term"]}')
+        if sec == 'wang' and not it.get('kind'):
+            err(f'望诊词条缺 kind：{it["term"]}')
+# 词条 → 组件图样的关键字闭环：每个词条必须命中组件 KINDS 里的至少一个关键字/kind
+import re as _re
+def kinds_of(comp):
+    src = open(os.path.join(APP, 'components', comp + '.vue'), encoding='utf-8').read()
+    ks = set(_re.findall(r"k:\s*'([^']+)'", src))
+    if comp == 'WangSvg':
+        ks |= set(_re.findall(r"'([a-z]+-[a-z-]+)'", src)) | set(_re.findall(r"props\.kind === '(zones)'", src))
+    return src, ks
+src_t, ks_t = kinds_of('TongueSvg')
+src_p, ks_p = kinds_of('PulseSvg')
+src_w, ks_w = kinds_of('WangSvg')
+for it in t_list:
+    if not any(k in it['term'] for k in ks_t):
+        err(f'舌象词条无匹配图样：{it["term"]}')
+for it in p_list:
+    if not any(k in it['term'] for k in ks_p):
+        err(f'脉象词条无匹配图样：{it["term"]}')
+for it in w_list:
+    if it['kind'] not in ks_w:
+        err(f'望诊词条 kind 未在 WangSvg 注册：{it["kind"]}')
+grps = sorted({it['grp'] for it in t_list} | {it['grp'] for it in p_list} | {it['grp'] for it in w_list})
+print(f'  舌脉望诊图册 {len(t_list)}舌 + {len(p_list)}脉 + {len(w_list)}望 · 分组 {len(grps)} 类 · 图样关键字全命中')
 
 # ---- 5 书籍箱健康 ----
 catalog = load('books-data', 'catalog.json')
@@ -217,10 +249,10 @@ print('\n[10] 论治加减·SVG图谱·结果端兜底')
 jj_n = sum(1 for z in rules['syndromes'] if z.get('jj'))
 if jj_n < 45:
     err(f'随证加减覆盖 {jj_n}/45 < 45')
-for key in ('dangerResult', 'comboHint', 'caseExplain', '恢复重练', 'TongueSvg', 'PulseSvg'):
+for key in ('dangerResult', 'comboHint', 'caseExplain', '恢复重练', 'TongueSvg', 'PulseSvg', 'WangSvg', 'atlasGroups'):
     if key not in diagvue:
         err(f'diag.vue 缺少 {key}')
-for comp in ('TongueSvg', 'PulseSvg'):
+for comp in ('TongueSvg', 'PulseSvg', 'WangSvg'):
     p = os.path.join(APP, 'components', comp + '.vue')
     if not os.path.isfile(p):
         err(f'缺少组件 {comp}.vue')

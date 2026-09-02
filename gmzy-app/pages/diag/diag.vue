@@ -305,30 +305,34 @@
             </view>
         </template>
 
-        <!-- 舌脉速查 -->
+        <!-- 舌脉望诊速查 -->
         <view v-if="step === 'pick'" class="sec atlas-sec">
             <view class="sec-head" @tap="toggleAtlas">
-                <text class="sec-title">👁 舌脉速查（10 舌 10 脉）</text>
+                <text class="sec-title">👁 舌脉望诊速查（{{ atlas.tongue.length }} 舌 · {{ atlas.pulse.length }} 脉 · {{ (atlas.wang || []).length }} 望）</text>
                 <text class="sec-op">{{ atlasOpen ? '收起' : '展开' }}</text>
             </view>
             <view v-show="atlasOpen">
                 <view class="seg atlas-seg">
                     <text class="seg-item" :class="{ on: atlasTab === 'she' }" @tap="atlasTab = 'she'">舌象</text>
                     <text class="seg-item" :class="{ on: atlasTab === 'mai' }" @tap="atlasTab = 'mai'">脉象</text>
+                    <text class="seg-item" :class="{ on: atlasTab === 'wang' }" @tap="atlasTab = 'wang'">望诊</text>
                 </view>
-                <view v-for="it in (atlasTab === 'she' ? atlas.tongue : atlas.pulse)" :key="it.term"
-                    class="atlas-item" @tap="atlasGo(it)">
-                    <TongueSvg v-if="atlasTab === 'she'" :term="it.term" />
-                    <PulseSvg v-else :term="it.term" />
-                    <view class="atlas-main">
-                        <view class="atlas-head">
-                            <text class="atlas-term serif-font">{{ it.term }}</text>
-                            <text class="atlas-src">{{ it.src }} ›</text>
+                <view v-for="g in atlasGroups" :key="g.grp" class="atlas-grp">
+                    <text class="atlas-grp-t serif-font">{{ g.grp }}</text>
+                    <view v-for="it in g.items" :key="it.term" class="atlas-item" @tap="atlasGo(it)">
+                        <TongueSvg v-if="atlasTab === 'she'" :term="it.term" />
+                        <PulseSvg v-else-if="atlasTab === 'mai'" :term="it.term" />
+                        <WangSvg v-else :kind="it.kind" />
+                        <view class="atlas-main">
+                            <view class="atlas-head">
+                                <text class="atlas-term serif-font">{{ it.term }}</text>
+                                <text class="atlas-src">{{ it.src }} ›</text>
+                            </view>
+                            <text class="atlas-desc">{{ it.desc }}</text>
                         </view>
-                        <text class="atlas-desc">{{ it.desc }}</text>
                     </view>
                 </view>
-                <text class="atlas-tip">示意图为程序化风格绘制，重在辨识要点；内容遵循传统教材描述，仅供学习参考。</text>
+                <text class="atlas-tip">示意图为程序化风格绘制，重在辨识要点；内容遵循传统教材描述，仅供学习参考。点条目可检索教材原文。</text>
             </view>
         </view>
 
@@ -358,6 +362,7 @@ import { store, pending, pushDiagRecord, clearDiagHistory, pushDiagQuiz, quizMis
 import { applyNavTheme } from '../../common/theme.js'
 import TongueSvg from '../../components/TongueSvg.vue'
 import PulseSvg from '../../components/PulseSvg.vue'
+import WangSvg from '../../components/WangSvg.vue'
 
 const DEFAULT_DISCLAIMER = '本功能仅供学习辨证思路参考，不能替代执业医师面诊，如有不适请及时就医。'
 
@@ -366,7 +371,24 @@ const selected = reactive({})
 const openGroups = reactive({})
 const step = ref('pick')
 const results = ref([])
-const atlas = ref({ tongue: [], pulse: [] })
+const atlas = ref({ tongue: [], pulse: [], wang: [] })
+
+// 按 grp 相邻合并成组（舌色/舌形/舌态/苔色/苔质 · 脉位/脉率/脉形/节律 · 望面色/望神…）
+const atlasGroups = computed(() => {
+    const list =
+        atlasTab.value === 'she'
+            ? atlas.value.tongue
+            : atlasTab.value === 'mai'
+              ? atlas.value.pulse
+              : atlas.value.wang || []
+    const out = []
+    for (const it of list) {
+        const last = out[out.length - 1]
+        if (last && last.grp === it.grp) last.items.push(it)
+        else out.push({ grp: it.grp || '·', items: [it] })
+    }
+    return out
+})
 const symTip = {} // 舌/脉症状 id -> atlas 对照文字（长按查看）
 const atlasOpen = ref(false)
 const atlasTab = ref('she')
@@ -947,6 +969,17 @@ function fmt(ts) {
 
 .atlas-sec { margin-top: 28rpx; }
 .atlas-seg { margin-bottom: 16rpx; }
+
+.atlas-grp-t {
+    display: block;
+    font-size: 24rpx;
+    color: #a08c68;
+    margin: 16rpx 4rpx 10rpx;
+    letter-spacing: 4rpx;
+}
+
+.atlas-grp-t::before { content: '· '; color: #b5935a; }
+.atlas-grp-t::after { content: ' ·'; color: #b5935a; }
 .atlas-item {
     flex-direction: row;
     display: flex;
