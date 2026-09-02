@@ -353,6 +353,23 @@ for frag in ('rate >= 80 ? 6', 'rate >= 60 ? 4', ': 2'):
         err(f'模考元气分档缺少：{frag}')
 print('  金榜仪式组件两台共载 · 医案/模考同灌元气（2/4/6 档） · 错题题干别名回流图考权重')
 
+# 13) 全站段位广播 · 回流冲销 · 温故日历
+print('\n[13] 段位广播·回流冲销·温故日历')
+for key in ('redeemMockMissTerm', 'WENGU_LADDER', 'wenguList', 'yuanqiToday', 'lastNo', 'tsBad', "'yuanqi'"):
+    if key not in storejs:
+        err(f'store.js 缺此轮要素：{key}')
+# 温故阶梯须 1/3/7 三天
+if 'WENGU_LADDER = [1, 3, 7]' not in storejs:
+    err('温故阶梯非 1/3/7')
+for key in ('redeemMockMissTerm', 'wenguGroups', 'goWengu', 'wg-when', 'pending.hub', 'hub-wengu'):
+    if key not in diagvue:
+        err(f'diag.vue 缺温故/冲销要素：{key}')
+minevue = open(os.path.join(APP, 'pages/mine/mine.vue'), encoding='utf-8').read()
+for key in ('gqRankInfo', 'yuanqiToday', 'goHub', 'kh-fill', 'kh-name', 'pending.hub', 'switchTab'):
+    if key not in minevue:
+        err(f'mine.vue 缺段位卡要素：{key}')
+print('  温故阶梯 1/3/7 已接线 · 回流冲销已入图考 · mine 段位卡挂载')
+
 print()
 if fail:
     print(f'FAILED: {len(fail)} 项')

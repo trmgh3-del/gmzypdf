@@ -18,6 +18,21 @@
             </view>
         </view>
 
+        <!-- 考举段位卡（全站三科共享） -->
+        <view class="sec khum" @tap="goHub">
+            <view class="kh-head">
+                <text class="kh-name serif-font">🏮 {{ gqRankInfo.name }}</text>
+                <text class="kh-yuan serif-font">元气 {{ yuanqi.energy }}</text>
+            </view>
+            <view class="kh-bar"><view class="kh-fill" :style="{ width: gqRankInfo.pct + '%' }"></view></view>
+            <view class="kh-meta">
+                <text v-if="todayY" class="kh-line today">今日 +{{ todayY }}</text>
+                <text class="kh-line">最佳连对 {{ yuanqi.best }}</text>
+                <text v-if="gqRankInfo.next" class="kh-line">下次「{{ gqRankInfo.nextName }}」差 {{ gqRankInfo.need }}</text>
+                <text class="kh-line go">入闱 ›</text>
+            </view>
+        </view>
+
         <!-- 阅读历史 -->
         <view class="sec">
             <view class="sec-head">
@@ -174,7 +189,7 @@
                 <text class="about-line">内置记忆卡 {{ CARD_NUM }} 张、复习思考题 1974 题与中医辨证论治辅助。</text>
                 <text class="about-line">辨证功能仅供学习参考，不能替代执业医师面诊。</text>
                 <text class="about-line">内容来源：光明中医网校（gmzy 系列教材电子化）。</text>
-                <text class="about-line">版本 v2.1.0 · 仅供学习研究使用</text>
+                <text class="about-line">版本 v2.20.0 · 仅供学习研究使用</text>
             </view>
         </view>
     </view>
@@ -183,7 +198,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { store, removeHistory, clearHistory, removeBookmark, clearBookmarks, setNight, backupBundle, restoreBundle, newPerDayLimit, removeMark } from '../../common/store.js'
+import { store, pending, removeHistory, clearHistory, removeBookmark, clearBookmarks, setNight, backupBundle, restoreBundle, newPerDayLimit, removeMark, gqRank, yuanqiToday } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
 import { setRemindHour } from '../../common/remind.js'
 import { formatTime } from '../../common/util.js'
@@ -202,6 +217,16 @@ onShow(() => {
 const remindName = computed(() => ({
     '-1': '关闭', '7': '每天 7:00', '20': '每天 20:00', '21': '每天 21:00'
 })[String(store.settings.remind ?? 20)])
+
+// ---- 考举段位（三科共享 · 日结） ----
+const yuanqi = computed(() => store.learn.gqYuanqi || { energy: 0, streak: 0, best: 0, rankIdx: 0 })
+const gqRankInfo = computed(() => gqRank(yuanqi.value.energy))
+const todayY = computed(() => yuanqiToday())
+
+function goHub() {
+    pending.hub = true
+    uni.switchTab({ url: '/pages/diag/diag' })
+}
 
 function pickRemind() {
     uni.showActionSheet({
@@ -481,6 +506,74 @@ function clearBm() {
     padding: 36rpx 0;
     display: flex;
     align-items: center;
+}
+
+/* 考举段位卡 */
+.khum {
+    margin: 0 30rpx 30rpx;
+    background: linear-gradient(135deg, #fdf4e0, #f6e5c2);
+    border: 1px solid rgba(181, 147, 90, 0.55);
+    border-radius: 18rpx;
+    padding: 22rpx 26rpx 18rpx;
+}
+
+.kh-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 12rpx;
+}
+
+.kh-name {
+    font-size: 32rpx;
+    font-weight: 700;
+    color: #5c2018;
+    letter-spacing: 3rpx;
+}
+
+.kh-yuan {
+    font-size: 24rpx;
+    color: #8d6244;
+}
+
+.kh-bar {
+    height: 12rpx;
+    background: rgba(181, 147, 90, 0.28);
+    border-radius: 999rpx;
+    overflow: hidden;
+    margin-bottom: 12rpx;
+}
+
+.kh-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #b5935a, #8b3a3a);
+    border-radius: 999rpx;
+    transition: width 0.4s ease;
+}
+
+.kh-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14rpx;
+}
+
+.kh-line {
+    font-size: 21rpx;
+    color: #8d6244;
+    background: rgba(181, 147, 90, 0.14);
+    border-radius: 8rpx;
+    padding: 4rpx 12rpx;
+}
+
+.kh-line.today {
+    color: #b5242a;
+    font-weight: 700;
+}
+
+.kh-line.go {
+    margin-left: auto;
+    color: #8b3a3a;
+    background: rgba(139, 58, 58, 0.1);
 }
 
 .stat {

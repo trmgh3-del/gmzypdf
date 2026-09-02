@@ -285,6 +285,28 @@
 
             <!-- 三科卡片 -->
             <view class="hub-listed">
+                <!-- 温故日历 -->
+                <view class="hub-kemu hub-wengu" v-if="wenguGroups.length">
+                    <view class="hk-head">
+                        <text class="hk-name serif-font">📕 温故日历</text>
+                        <text class="hk-go"></text>
+                    </view>
+                    <text class="hk-desc">三科错题按 1 / 3 / 7 天阶梯自动复温，曰「温故而知新」</text>
+                    <view class="wg-groups">
+                        <view v-for="g in wenguGroups" :key="g.key" class="wg-row" @tap="goWengu(g)">
+                            <text class="wg-src" :class="{ m: g.src === '模考', g: g.src === '图考' }">{{ g.src }}</text>
+                            <text class="wg-info">
+                                {{ g.src === '医案' ? '医案错题' : g.src === '图考' ? '图谱弱项' : g.src === '模考' ? '综合模考' : g.bookKey }}
+                                <text v-if="g.level >= 3" class="wg-lv">经三阶</text>
+                            </text>
+                            <text class="wg-when" :class="{ now: g.now > 0 }">
+                                {{ g.now > 0 ? g.now + ' 题到日' : (g.nextDue && g.nextDue <= 99 ? g.nextDue + ' 天后' : '') }}
+                            </text>
+                            <text class="wg-go">复温 ›</text>
+                        </view>
+                    </view>
+                </view>
+
                 <view class="hub-kemu" @tap="startCase()">
                     <view class="hk-head">
                         <text class="hk-name serif-font">🩺 医案辨证</text>
@@ -559,7 +581,7 @@ import { ref, reactive, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { loadDiagRules, loadDeck, loadDiagAtlas, loadDiagQuiz, loadDiagGuide } from '../../common/learn.js'
 import { diagnose, symptomIndex, findVs, RED_FLAGS, DANGER_SYNS } from '../../common/diagnosis.js'
-import { store, pending, pushDiagRecord, clearDiagHistory, pushDiagQuiz, quizMistakes, setQuizAnswer, bumpAtlasStat, clearAtlasStats, bumpGqYuanqi, endGqStreak, gqRank, awardExamEnergy } from '../../common/store.js'
+import { store, pending, pushDiagRecord, clearDiagHistory, pushDiagQuiz, quizMistakes, setQuizAnswer, bumpAtlasStat, clearAtlasStats, bumpGqYuanqi, endGqStreak, gqRank, awardExamEnergy, redeemMockMissTerm, wenguList } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
 import TongueSvg from '../../components/TongueSvg.vue'
 import PulseSvg from '../../components/PulseSvg.vue'
@@ -701,6 +723,10 @@ onShow(() => {
     if (pending.diagSymptoms) {
         for (const id of pending.diagSymptoms) selected[id] = true
         pending.diagSymptoms = null
+    }
+    if (pending.hub) {
+        pending.hub = null
+        step.value = 'hub'
     }
 })
 
@@ -859,6 +885,7 @@ function pickGQ(c) {
     if (c === cur.term) {
         gqOk.value++
         bumpAtlasStat(cur.term, 'gqOk')
+        redeemMockMissTerm(cur.term) // 模考回流权重冲销：考对一次减一次
         const { streak, bonus, promo } = bumpGqYuanqi()
         if (bonus) uni.showToast({ icon: 'none', title: `🔥 连对 ${streak} · 元气 +${bonus}` })
         showPromo(promo)
@@ -887,6 +914,30 @@ const mockUsedStr = computed(() => {
 
 function goMock() {
     uni.navigateTo({ url: '/pages/quiz/quiz?mock=1' })
+}
+
+// ---- 温故日历：三科错题的到期复习 ----
+const wenguGroups = computed(() => {
+    const groups = {}
+    for (const w of wenguList()) {
+        const key = w.src === '图考' ? '图考' : w.src === '医案' ? '医案' : w.src + ':' + w.bookKey
+        const g = groups[key] || (groups[key] = { key, src: w.src, bookKey: w.bookKey, now: 0, nextDue: null, level: 0 })
+        if (w.dueIn === 0) {
+            g.now++
+            g.level = Math.max(g.level, w.level)
+        } else {
+            g.nextDue = Math.min(g.nextDue == null ? 99 : g.nextDue, w.dueIn)
+        }
+    }
+    return Object.values(groups).sort((a, b) => b.now - a.now || (a.nextDue || 99) - (b.nextDue || 99))
+})
+
+function goWengu(g) {
+    if (g.src === '医案') return startCaseErr()
+    if (g.src === '图考') return startGQ()
+    if (g.src === '模考') return goMock()
+    // 题库单科：直接开「待巩固」视图
+    uni.navigateTo({ url: '/pages/quiz/quiz?k=' + encodeURIComponent(g.bookKey) + '&err=1' })
 }
 
 function nextGQ() {
@@ -2161,6 +2212,75 @@ function fmt(ts) {
 .hk-stat.miss {
     color: #b5242a;
     background: rgba(181, 36, 42, 0.08);
+}
+
+/* 温故日历 */
+.hub-wengu {
+    border-color: rgba(200, 147, 47, 0.5);
+    background: linear-gradient(135deg, #fffdf5, #fcf4e2);
+}
+
+.wg-groups {
+    margin-top: 14rpx;
+    display: flex;
+    flex-direction: column;
+    gap: 10rpx;
+}
+
+.wg-row {
+    display: flex;
+    align-items: center;
+    gap: 12rpx;
+    background: rgba(255, 253, 245, 0.85);
+    border: 1px dashed rgba(181, 147, 90, 0.4);
+    border-radius: 12rpx;
+    padding: 12rpx 16rpx;
+}
+
+.wg-src {
+    font-size: 20rpx;
+    color: #fffdf7;
+    background: #8b3a3a;
+    border-radius: 8rpx;
+    padding: 2rpx 12rpx;
+    flex-shrink: 0;
+}
+
+.wg-src.m {
+    background: #6e5a9e;
+}
+
+.wg-src.g {
+    background: #a8642f;
+}
+
+.wg-info {
+    flex: 1;
+    font-size: 23rpx;
+    color: #5c2018;
+}
+
+.wg-lv {
+    font-size: 19rpx;
+    color: #a08c68;
+    margin-left: 8rpx;
+}
+
+.wg-when {
+    font-size: 21rpx;
+    color: #8d8371;
+    flex-shrink: 0;
+}
+
+.wg-when.now {
+    color: #b5242a;
+    font-weight: 700;
+}
+
+.wg-go {
+    font-size: 23rpx;
+    color: #8b3a3a;
+    flex-shrink: 0;
 }
 
 /* 图考内连对/弱项徽章 */

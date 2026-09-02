@@ -178,11 +178,11 @@ function todayStr() {
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
-function bumpActivity(kind) {
+function bumpActivity(kind, n = 1) {
     const t = todayStr()
-    if (!store.learn.activity[t]) store.learn.activity[t] = { cards: 0, quiz: 0, done: 0 }
+    if (!store.learn.activity[t]) store.learn.activity[t] = { cards: 0, quiz: 0, done: 0, yuanqi: 0 }
     const a = store.learn.activity[t]
-    a[kind] = (a[kind] || 0) + 1
+    a[kind] = (a[kind] || 0) + n
 }
 
 // ---- 记忆卡（SM-2 间隔重复，uuid 稳定键） ----
@@ -302,10 +302,10 @@ export function markNewCardUsed(uuid) {
 export function setQuizAnswer(bookKey, uuid, ok) {
     if (!store.learn.quizDone[bookKey]) store.learn.quizDone[bookKey] = {}
     store.learn.quizDone[bookKey][uuid] = ok ? 1 : 2
-    // 错题追踪：连错 2 次进入错题包，连对 3 次释放
+    // 错题追踪：连错进入错题包；tsBad 记末次错误时刻，供温故日历 1/3/7 天复温
     if (!store.learn.qErr[bookKey]) store.learn.qErr[bookKey] = {}
     const e = store.learn.qErr[bookKey][uuid] || { m: 0, c: 0 }
-    if (ok) { e.c++; e.m = 0 } else { e.m++; e.c = 0 }
+    if (ok) { e.c++; e.m = 0 } else { e.m++; e.c = 0; e.tsBad = Date.now() }
     store.learn.qErr[bookKey][uuid] = e
     // 每日对错统计（正确率曲线）
     const t = todayStr()
@@ -375,6 +375,7 @@ export function bumpAtlasStat(term, field) {
     if (!s.atlasStats) s.atlasStats = {}
     if (!s.atlasStats[term]) s.atlasStats[term] = { see: 0, gqOk: 0, gqNo: 0 }
     s.atlasStats[term][field] = (s.atlasStats[term][field] || 0) + 1
+    if (field === 'gqNo') s.atlasStats[term].lastNo = Date.now() // 供温故日历排期
 }
 
 export function clearAtlasStats() {
@@ -424,6 +425,7 @@ export function awardExamEnergy(n) {
     const y = store.learn.gqYuanqi || (store.learn.gqYuanqi = { energy: 0, streak: 0, best: 0, rankIdx: 0 })
     const prev = gqRank(y.energy).idx
     y.energy += Math.max(0, n | 0)
+    bumpActivity('yuanqi', Math.max(0, n | 0))
     return afterEnergyChange(prev)
 }
 
@@ -436,6 +438,7 @@ export function bumpGqYuanqi() {
     y.energy += 1
     const bonus = y.streak % 5 === 0 ? 2 : 0
     if (bonus) y.energy += bonus
+    bumpActivity('yuanqi', 1 + bonus)
     return { streak: y.streak, bonus, promo: afterEnergyChange(prev) }
 }
 
@@ -450,6 +453,51 @@ export function bumpMockMissTerm(term) {
     const s = store.learn
     if (!s.mockMissTerms) s.mockMissTerms = {}
     s.mockMissTerms[term] = (s.mockMissTerms[term] || 0) + 1
+}
+
+// 图考考对冲销一次模考回流权重（防止永久夕阳题）
+export function redeemMockMissTerm(term) {
+    const s = store.learn
+    if (s.mockMissTerms && s.mockMissTerms[term] > 0) {
+        s.mockMissTerms[term]--
+        if (s.mockMissTerms[term] <= 0) delete s.mockMissTerms[term]
+    }
+}
+
+// ---- 温故日历：三科错题按 1 / 3 / 7 天阶梯复温 ----
+export const WENGU_LADDER = [1, 3, 7]
+
+// 汇总待温条目（dueIn=0 即到日；按到期天排序）
+export function wenguList() {
+    const DAY = 86400000
+    const now = Date.now()
+    const out = []
+    const qErr = store.learn.qErr || {}
+    const srcOf = { _diag_: '医案', _mock_: '模考' }
+    for (const [bk, errs] of Object.entries(qErr)) {
+        for (const [u, e] of Object.entries(errs)) {
+            if (!(e.m >= 1)) continue // 已无未释之错
+            if ((e.c || 0) >= 4) continue // 错后再连对 4 题，视作脱困
+            const lad = WENGU_LADDER[Math.min(e.c || 0, 2)]
+            const dueIn = Math.max(0, Math.ceil(((e.tsBad || 0) + lad * DAY - now) / DAY))
+            out.push({ src: srcOf[bk] || '题库', bookKey: bk, uuid: u, dueIn, level: lad })
+        }
+    }
+    const st = store.learn.atlasStats || {}
+    for (const [term, v] of Object.entries(st)) {
+        const net = (v.gqNo || 0) - (v.gqOk || 0)
+        if (net <= 0) continue
+        const lad = WENGU_LADDER[Math.min(net - 1, 2)]
+        const dueIn = Math.max(0, Math.ceil(((v.lastNo || 0) + lad * DAY - now) / DAY))
+        out.push({ src: '图考', term, dueIn, level: lad })
+    }
+    out.sort((a, b) => a.dueIn - b.dueIn)
+    return out
+}
+
+// 今日已炼元气值（daily 日结）
+export function yuanqiToday() {
+    return (store.learn.activity[todayStr()] || {}).yuanqi || 0
 }
 
 // ---- 学习总览 ----
