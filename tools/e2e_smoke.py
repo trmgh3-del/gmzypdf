@@ -392,6 +392,29 @@ for key in ('wkHeat', 'wkNote', 'copyWeekly', 'weeklyText', '本周奏报', '誊
         err(f'stats.vue 缺周报要素：{key}')
 print('  出片两路（App 相册 / H5 下载/长按兜底） · 温故并入每日提醒文案 · 本周奏报（7 日热+拟签）已接线')
 
+# 15) HBuilderX 标准结构（入口页 / index.html / vueVersion）
+print('\n[15] HBuilderX 标准结构')
+import json as _json, re as _re
+_pj_raw = open(os.path.join(APP, 'pages.json'), encoding='utf-8').read()
+_pj = _json.loads(_re.sub(r'//[^\n]*', '', _pj_raw))
+if _pj['pages'][0]['path'] != 'pages/index/index':
+    err(f'pages.json 首项非首页 index：{_pj["pages"][0]["path"]}（将成启动页）')
+_idx = os.path.join(APP, 'index.html')
+if not os.path.isfile(_idx):
+    err('根目录缺 index.html（HBuilderX H5 vite 入口）')
+else:
+    _ix = open(_idx, encoding='utf-8').read()
+    for key in ('<div id="app">', 'src="/main.js"', '<!--preload-links-->'):
+        if key not in _ix:
+            err(f'index.html 缺标准 token：{key}')
+_mf = open(os.path.join(APP, 'manifest.json'), encoding='utf-8').read()
+if '"vueVersion": "3"' not in _mf:
+    err('manifest.json 缺 vueVersion=3 标记（HBuilderX 模板识别）')
+_bg = open(os.path.join(APP, 'main.js'), encoding='utf-8').read()
+if 'createSSRApp' not in _bg:
+    err('main.js 非 vue3 createSSRApp 结构')
+print('  入口=index · 根 index.html 齐 · vueVersion=3 · createSSRApp 主件')
+
 print()
 if fail:
     print(f'FAILED: {len(fail)} 项')

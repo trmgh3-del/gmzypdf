@@ -189,7 +189,7 @@
                 <text class="about-line">内置记忆卡 {{ CARD_NUM }} 张、复习思考题 1974 题与中医辨证论治辅助。</text>
                 <text class="about-line">辨证功能仅供学习参考，不能替代执业医师面诊。</text>
                 <text class="about-line">内容来源：光明中医网校（gmzy 系列教材电子化）。</text>
-                <text class="about-line">版本 v2.21.0 · 仅供学习研究使用</text>
+                <text class="about-line">版本 v2.21.1 · 仅供学习研究使用</text>
             </view>
         </view>
     </view>

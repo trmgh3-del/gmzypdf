@@ -1,5 +1,7 @@
 # 光明中医文库·学习诊断系统（UniApp Vue3）
 
+> **工程结构**：HBuilderX 标准 uni-app Vue3 项目——根目录同层含 `App.vue` / `main.js` / `index.html`（H5 的 vite 入口，引用 `/main.js`）/ `pages.json` / `manifest.json` / `uni.scss`，manifest 带 `vueVersion: "3"`。HBuilderX 直接导入本目录即可运行到浏览器或云打包；命令行构建时把本目录整体作为脚手架的 `src/`。启动页 = `pages/index/index`（pages.json 首项）。
+
 基于 **HBuilderX + UniApp（Vue3 语法）** 开发的跨平台离线中医学习 App，
 收录光明中医函授教材 **26 部**全文精排内容（约 1300 万字、900+ 插图），
 在完整文库之上内置**记忆卡、复习思考题、中医辨证辅助**三大学习系统，

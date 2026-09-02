@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta
+            id="viewport"
+            name="viewport"
+            content="width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0,user-scalable=no,viewport-fit=cover"
+        />
+        <script>
+            // 动态补 viewport-fit=cover（iPhone 安全区适配）
+            var coverSupport =
+                'CSS' in window &&
+                typeof CSS.supports === 'function' &&
+                (CSS.supports('top: env(a)') || CSS.supports('top: constant(a)'))
+            if (!coverSupport) {
+                var vp = document.getElementById('viewport')
+                if (vp)
+                    vp.setAttribute(
+                        'content',
+                        'width=device-width,initial-scale=1.0,maximum-scale=1.0,minimum-scale=1.0,user-scalable=no'
+                    )
+            }
+        </script>
+        <title>光明中医文库</title>
+        <!--preload-links-->
+        <!--app-context-->
+    </head>
+    <body>
+        <div id="app"><!--app-html--></div>
+        <script type="module" src="/main.js"></script>
+    </body>
+</html>
