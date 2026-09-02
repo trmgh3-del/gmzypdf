@@ -287,9 +287,19 @@ jj_n = sum(1 for z in rules['syndromes'] if z.get('jj'))
 if jj_n < 45:
     err(f'随证加减覆盖 {jj_n}/45 < 45')
 for key in ('dangerResult', 'comboHint', 'caseExplain', '恢复重练', 'TongueSvg', 'PulseSvg', 'WangSvg', 'WenSvg',
-            'atlasGroups', 'bridge(', 'bridgedOn', 'toggleSym', "atlasTab === 'wen'", "atlasTab === 'wenj'"):
+            'atlasGroups', 'bridge(', 'bridgedOn', 'toggleSym', "atlasTab === 'wen'", "atlasTab === 'wenj'",
+            'startGQ', 'pickGQ', 'nextGQ', 'gqPoolNow', 'gqMiss', "step === 'gq'",
+            'peekItem', 'peekSearch', 'ledgerRows', 'ledgerTotal', 'onClearStats',
+            'bumpAtlasStat', 'longpress', 'GQ_N'):
     if key not in diagvue:
         err(f'diag.vue 缺少 {key}')
+# 图考池须排除与「淡红·薄白苔」渲染相同的词条（本版本为「白润苔」）
+if "it.term !== '白润苔'" not in diagvue:
+    err('图考池渲染歧义排除规则缺失')
+storejs = open(os.path.join(APP, 'common/store.js'), encoding='utf-8').read()
+for key in ('atlasStats', 'bumpAtlasStat', 'clearAtlasStats'):
+    if key not in storejs:
+        err(f'store.js 缺少 {key}')
 for comp in ('TongueSvg', 'PulseSvg', 'WangSvg', 'WenSvg'):
     p = os.path.join(APP, 'components', comp + '.vue')
     if not os.path.isfile(p):

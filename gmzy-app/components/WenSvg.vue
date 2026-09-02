@@ -1,6 +1,6 @@
 <template>
     <!-- 闻诊/问诊示意图：ting=声波，xiu=气味，ask=气泡+数序 -->
-    <svg class="wen-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <svg class="wen-svg" :class="{ big }" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <!-- 听声音 -->
         <g v-if="kind === 'ting'">
             <path d="M28 42 v16 h14 l18 14 V28 L42 42 Z" fill="#8b3a3a" />
@@ -54,7 +54,8 @@
 <script setup>
 defineProps({
     kind: { type: String, default: 'ask' },
-    num: { type: String, default: '' }
+    num: { type: String, default: '' },
+    big: { type: Boolean, default: false }
 })
 </script>
 
@@ -63,6 +64,11 @@ defineProps({
     width: 96rpx;
     height: 96rpx;
     flex-shrink: 0;
+}
+
+.wen-svg.big {
+    width: 220rpx;
+    height: 220rpx;
 }
 
 .num-serif {

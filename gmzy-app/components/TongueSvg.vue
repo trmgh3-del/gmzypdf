@@ -1,6 +1,6 @@
 <template>
     <!-- 舌象示意图（风格化 SVG，离线无资源）：舌色/舌形/舌态/苔色/苔质 -->
-    <svg class="tongue-svg" :viewBox="'0 0 120 ' + vbh" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <svg class="tongue-svg" :class="{ big }" :viewBox="'0 0 120 ' + vbh" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <g :transform="cfg.tilt ? `rotate(${cfg.tilt} 60 40)` : ''">
             <!-- 舌体 -->
             <path :d="bodyPath" :fill="cfg.body" />
@@ -67,7 +67,8 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-    term: { type: String, default: '' }
+    term: { type: String, default: '' },
+    big: { type: Boolean, default: false }
 })
 
 // 舌体变体
@@ -169,5 +170,10 @@ const vbh = computed(() => variant.value.h)
     width: 96rpx;
     height: 132rpx;
     flex-shrink: 0;
+}
+
+.tongue-svg.big {
+    width: 200rpx;
+    height: 276rpx;
 }
 </style>

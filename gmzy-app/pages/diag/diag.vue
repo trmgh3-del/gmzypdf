@@ -75,6 +75,17 @@
             </view>
             <text class="ce-acc" v-if="(store.learn.diagQuiz || {}).done">累计 {{ dqAcc }} 正确</text>
 
+            <!-- 图考坐堂入口 -->
+            <view class="case-entry gq-entry" @tap="startGQ">
+                <view class="ce-left">
+                    <text class="ce-in serif-font">🖼 图考坐堂</text>
+                    <text class="ce-desc">看图辨象：舌脉望诊随机抽考，每次 8 题</text>
+                </view>
+                <view class="ce-side">
+                    <text class="ce-op serif-font">开考 ›</text>
+                </view>
+            </view>
+
             <!-- 问诊引导入口 -->
             <view class="case-entry guide-entry" @tap="startGuide">
                 <view class="ce-left">
@@ -186,6 +197,66 @@
             </view>
         </template>
 
+
+        <!-- 图考坐堂 -->
+        <template v-else-if="step === 'gq'">
+            <view class="case-head">
+                <button class="btn ghost" @tap="step = 'pick'">‹ 退出图考</button>
+                <text class="case-round serif-font">对 {{ gqOk }}</text>
+            </view>
+            <view class="case-card gq-card">
+                <view class="case-qtag-row">
+                    <text class="qtag">图考 · {{ gqCur.secName }}</text>
+                    <text class="case-seq serif-font">{{ gqPos + 1 }}/{{ gqList.length }}</text>
+                </view>
+                <view class="gq-fig">
+                    <TongueSvg v-if="gqCur.sec === 'she'" :term="gqCur.term" big />
+                    <PulseSvg v-else-if="gqCur.sec === 'mai'" :term="gqCur.term" big />
+                    <WangSvg v-else :kind="gqCur.kind" big />
+                </view>
+                <text class="gq-hint serif-font">上图所示为何？</text>
+                <view class="case-choices">
+                    <view
+                        v-for="c in gqOpts"
+                        :key="c"
+                        class="case-choice"
+                        :class="{ right: gqPicked && c === gqCur.term, wrong: gqPicked === c && c !== gqCur.term }"
+                        @tap="pickGQ(c)"
+                    >
+                        <text class="case-choice-t">{{ c }}</text>
+                        <text v-if="gqPicked && c === gqCur.term" class="case-mark">✓ 正解</text>
+                        <text v-else-if="gqPicked === c" class="case-mark bad">✗</text>
+                    </view>
+                </view>
+                <view v-if="gqPicked" class="case-exp">
+                    <text class="case-exp-title serif-font">要点 · {{ gqCur.term }}</text>
+                    <text class="case-exp-text">{{ gqCur.desc }}（{{ gqCur.src }}）</text>
+                </view>
+                <view class="case-foot">
+                    <text v-if="!gqPicked" class="case-hint">细察图示要点，选出对应术语</text>
+                    <button v-else class="btn primary case-next" @tap="nextGQ">
+                        {{ gqPos + 1 >= gqList.length ? '查看本组成绩' : '下一题 ›' }}
+                    </button>
+                </view>
+            </view>
+
+            <!-- 本组成绩 -->
+            <view v-if="gqDone" class="case-mask">
+                <view class="case-over">
+                    <text class="co-title serif-font">本组成绩</text>
+                    <text class="co-score serif-font">{{ gqOk }} / {{ gqList.length }}</text>
+                    <text class="co-line">正确率 {{ Math.round((gqOk / gqList.length) * 100) }}%</text>
+                    <view v-if="gqMiss.length" class="gq-miss">
+                        <text class="gq-miss-t serif-font">本组看错（已计入薄弱诊法）</text>
+                        <text v-for="m in gqMiss" :key="m" class="gq-miss-item">{{ m }}</text>
+                    </view>
+                    <view class="co-btns">
+                        <text class="co-btn ghost" @tap="step = 'pick'">返回辨证</text>
+                        <text class="co-btn solid" @tap="startGQ">再来一组</text>
+                    </view>
+                </view>
+            </view>
+        </template>
 
         <template v-else-if="step === 'result'">
             <view class="result-head">
@@ -327,7 +398,7 @@
                 </view>
                 <view v-for="g in atlasGroups" :key="g.grp" class="atlas-grp">
                     <text class="atlas-grp-t serif-font">{{ g.grp }}</text>
-                    <view v-for="it in g.items" :key="it.term" class="atlas-item" @tap="atlasGo(it)">
+                    <view v-for="it in g.items" :key="it.term" class="atlas-item" @tap="atlasGo(it)" @longpress="peek(it)">
                         <view
                             v-if="atlasTab === 'she' || atlasTab === 'mai'"
                             class="atlas-fig"
@@ -350,9 +421,26 @@
                         </view>
                     </view>
                 </view>
-                <text class="atlas-tip">示意图为程序化风格绘制，重在辨识要点；点符号可检索教材原文。
+                <text class="atlas-tip">示意图为程序化风格绘制，重在辨识要点；点符号可检索教材原文，<text class="atlas-tip-strong">长按条目看原文卡（不跳转）</text>。
                     <text v-if="atlasTab === 'she' || atlasTab === 'mai'">点舌脉图可把对应症状直接勾入辨证（多候选则弹出选择）。</text>
                 </text>
+
+                <!-- 图谱账本 -->
+                <view class="gq-ledger" v-if="ledgerTotal.cnt">
+                    <view class="gq-ledger-head" @tap="ledgerOpen = !ledgerOpen">
+                        <text class="gq-ledger-t serif-font">📊 我的图谱账本</text>
+                        <text class="gq-ledger-s">阅原文 {{ ledgerTotal.see }} · 图考对 {{ ledgerTotal.ok }} · 错 {{ ledgerTotal.no }}</text>
+                        <text class="gq-ledger-op">{{ ledgerOpen ? '收起' : '明细' }}</text>
+                    </view>
+                    <view v-show="ledgerOpen" class="gq-ledger-body">
+                        <view v-for="r in ledgerRows" :key="r.term" class="gq-ledger-row">
+                            <text class="gq-ledger-term serif-font">{{ r.term }}</text>
+                            <text class="gq-ledger-num">阅 {{ r.see }} · 对 {{ r.gqOk }} · 错 {{ r.gqNo }}</text>
+                            <text v-if="r.gqNo > r.gqOk" class="gq-ledger-weak">弱</text>
+                        </view>
+                        <text class="gq-ledger-clear" @tap="onClearStats">清空账本</text>
+                    </view>
+                </view>
             </view>
         </view>
 
@@ -370,6 +458,27 @@
                 <text class="his-time">{{ fmt(h.ts) }}</text>
             </view>
         </view>
+
+        <!-- 图谱原文卡（长按条目，不跳搜索） -->
+        <view v-if="peekItem" class="peek-mask" @tap="peekItem = null">
+            <view class="peek-card" @tap.stop>
+                <text class="peek-title serif-font">{{ peekItem.term }}</text>
+                <view class="peek-fig">
+                    <TongueSvg v-if="peekTab === 'she'" :term="peekItem.term" big />
+                    <PulseSvg v-else-if="peekTab === 'mai'" :term="peekItem.term" big />
+                    <WangSvg v-else-if="peekTab === 'wang'" :kind="peekItem.kind" big />
+                    <WenSvg v-else :kind="peekItem.kind" :num="peekItem.num" big />
+                </view>
+                <scroll-view scroll-y class="peek-scroll">
+                    <text class="peek-desc">{{ peekItem.desc }}</text>
+                </scroll-view>
+                <text class="peek-src">{{ peekItem.src }}</text>
+                <view class="peek-btns">
+                    <text class="peek-btn ghost" @tap="peekItem = null">继续看图谱</text>
+                    <text class="peek-btn solid" @tap="peekSearch">检索教材原文 ›</text>
+                </view>
+            </view>
+        </view>
     </view>
 </template>
 
@@ -378,7 +487,7 @@ import { ref, reactive, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { loadDiagRules, loadDeck, loadDiagAtlas, loadDiagQuiz, loadDiagGuide } from '../../common/learn.js'
 import { diagnose, symptomIndex, findVs, RED_FLAGS, DANGER_SYNS } from '../../common/diagnosis.js'
-import { store, pending, pushDiagRecord, clearDiagHistory, pushDiagQuiz, quizMistakes, setQuizAnswer } from '../../common/store.js'
+import { store, pending, pushDiagRecord, clearDiagHistory, pushDiagQuiz, quizMistakes, setQuizAnswer, bumpAtlasStat, clearAtlasStats } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
 import TongueSvg from '../../components/TongueSvg.vue'
 import PulseSvg from '../../components/PulseSvg.vue'
@@ -548,9 +657,134 @@ async function toggleAtlas() {
 
 // 速查词条 → 全库检索教材原文
 function atlasGo(it) {
+    bumpAtlasStat(it.term, 'see')
     uni.setStorageSync('pendingQuery', it.term.replace(/[（(].*/, ''))
     pending.keyword = it.term.replace(/[（(].*/, '')
     uni.switchTab({ url: '/pages/search/search' })
+}
+
+// ---- 长按原文卡 ----
+const peekItem = ref(null)
+const peekTab = ref('she')
+function peek(it) {
+    peekTab.value = atlasTab.value
+    peekItem.value = it
+    bumpAtlasStat(it.term, 'see')
+}
+function peekSearch() {
+    const it = peekItem.value
+    peekItem.value = null
+    atlasGo(it)
+}
+
+// ---- 图考坐堂 ----
+const gqList = ref([])
+const gqPos = ref(0)
+const gqOk = ref(0)
+const gqPicked = ref(null)
+const gqOpts = ref([])
+const gqDone = ref(false)
+const gqMiss = ref([])
+const GQ_N = 8
+const gqCur = computed(() => gqList.value[gqPos.value] || {})
+
+function gqPoolNow() {
+    const pool = []
+    // 渲染唯一性维护注意：「白润苔」与「淡红·薄白苔」图样相同，
+    // 一项不能辨识，故不入考池
+    ;(atlas.value.tongue || [])
+        .filter((it) => it.term !== '白润苔')
+        .forEach((it) => pool.push({ ...it, sec: 'she', secName: '舌象' }))
+    ;(atlas.value.pulse || []).forEach((it) => pool.push({ ...it, sec: 'mai', secName: '脉象' }))
+    ;(atlas.value.wang || []).forEach((it) => pool.push({ ...it, sec: 'wang', secName: '望诊' }))
+    return pool
+}
+
+function shuffleArr(a) {
+    const r = [...a]
+    for (let i = r.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[r[i], r[j]] = [r[j], r[i]]
+    }
+    return r
+}
+
+async function startGQ() {
+    if (!atlas.value.tongue.length) {
+        try {
+            atlas.value = await loadDiagAtlas()
+        } catch (e) {
+            uni.showToast({ icon: 'none', title: '图谱未就绪' })
+            return
+        }
+    }
+    const pool = shuffleArr(gqPoolNow())
+    gqList.value = pool.slice(0, GQ_N)
+    gqOk.value = 0
+    gqDone.value = false
+    gqMiss.value = []
+    gqPos.value = 0
+    makeGQ()
+    step.value = 'gq'
+}
+
+function makeGQ() {
+    gqPicked.value = null
+    const cur = gqCur.value
+    if (!cur.term) return
+    const samePool = gqPoolNow().filter((x) => x.sec === cur.sec && x.term !== cur.term)
+    gqOpts.value = shuffleArr([cur.term, ...shuffleArr(samePool).slice(0, 3).map((x) => x.term)])
+}
+
+function pickGQ(c) {
+    if (gqPicked.value) return
+    gqPicked.value = c
+    const cur = gqCur.value
+    if (c === cur.term) {
+        gqOk.value++
+        bumpAtlasStat(cur.term, 'gqOk')
+    } else {
+        gqMiss.value.push(cur.term)
+        bumpAtlasStat(cur.term, 'gqNo')
+    }
+}
+
+function nextGQ() {
+    if (!gqPicked.value) return
+    if (gqPos.value + 1 >= gqList.value.length) {
+        gqDone.value = true
+        return
+    }
+    gqPos.value++
+    makeGQ()
+}
+
+// ---- 图谱账本 ----
+const ledgerOpen = ref(false)
+const ledgerRows = computed(() => {
+    const stats = (store.learn && store.learn.atlasStats) || {}
+    return Object.entries(stats)
+        .map(([term, v]) => ({ term, see: v.see || 0, gqOk: v.gqOk || 0, gqNo: v.gqNo || 0 }))
+        .filter((r) => r.see || r.gqOk || r.gqNo)
+        .sort((a, b) => b.gqNo - a.gqNo || b.see + b.gqOk + b.gqNo - (a.see + a.gqOk + a.gqNo))
+})
+const ledgerTotal = computed(() => {
+    const rows = ledgerRows.value
+    return {
+        cnt: rows.length,
+        see: rows.reduce((s, r) => s + r.see, 0),
+        ok: rows.reduce((s, r) => s + r.gqOk, 0),
+        no: rows.reduce((s, r) => s + r.gqNo, 0)
+    }
+})
+function onClearStats() {
+    uni.showModal({
+        title: '清空图谱账本？',
+        content: '将清空查原文与图考对错的全部统计。',
+        confirmText: '清空',
+        confirmColor: '#8b3a3a',
+        success: (r) => r.confirm && clearAtlasStats()
+    })
 }
 
 function clearAll() {
@@ -1517,6 +1751,229 @@ function fmt(ts) {
     color: #6b5d4f;
     line-height: 1.8;
     margin-top: 8rpx;
+}
+
+/* ===== 图考坐堂 ===== */
+.gq-entry {
+    margin-top: 18rpx;
+}
+
+.gq-card {
+    border: 2rpx solid rgba(181, 147, 90, 0.4);
+}
+
+.gq-fig {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: radial-gradient(circle at 50% 45%, #fffaf0, #f4ecd8);
+    border: 1px solid rgba(139, 58, 58, 0.12);
+    border-radius: 18rpx;
+    min-height: 320rpx;
+    padding: 30rpx 20rpx;
+    margin-bottom: 16rpx;
+}
+
+.gq-hint {
+    display: block;
+    text-align: center;
+    font-size: 30rpx;
+    color: #5c2018;
+    letter-spacing: 3rpx;
+    margin: 8rpx 0 16rpx;
+}
+
+.gq-miss {
+    margin-top: 18rpx;
+    width: 100%;
+    text-align: left;
+}
+
+.gq-miss-t {
+    display: block;
+    font-size: 24rpx;
+    color: #7c2f26;
+    font-weight: 700;
+    margin-bottom: 8rpx;
+}
+
+.gq-miss-item {
+    display: block;
+    font-size: 24rpx;
+    color: #6b5d4f;
+    line-height: 1.9;
+}
+
+/* ===== 图谱账本 ===== */
+.gq-ledger {
+    margin-top: 20rpx;
+    background: #fffdf5;
+    border: 1px solid rgba(139, 58, 58, 0.12);
+    border-radius: 14rpx;
+    overflow: hidden;
+}
+
+.gq-ledger-head {
+    display: flex;
+    align-items: center;
+    padding: 18rpx 22rpx;
+    gap: 14rpx;
+}
+
+.gq-ledger-t {
+    font-size: 26rpx;
+    color: #5c2018;
+    font-weight: 700;
+}
+
+.gq-ledger-s {
+    flex: 1;
+    font-size: 21rpx;
+    color: #8d8371;
+}
+
+.gq-ledger-op {
+    font-size: 22rpx;
+    color: #8b3a3a;
+}
+
+.gq-ledger-body {
+    border-top: 1px dashed #e4dcc8;
+    padding: 14rpx 22rpx 18rpx;
+}
+
+.gq-ledger-row {
+    display: flex;
+    align-items: baseline;
+    gap: 14rpx;
+    padding: 8rpx 0;
+}
+
+.gq-ledger-term {
+    font-size: 25rpx;
+    color: #5c2018;
+    width: 260rpx;
+}
+
+.gq-ledger-num {
+    flex: 1;
+    font-size: 21rpx;
+    color: #8d8371;
+}
+
+.gq-ledger-weak {
+    font-size: 20rpx;
+    color: #fffdf7;
+    background: #b5242a;
+    border-radius: 8rpx;
+    padding: 2rpx 10rpx;
+}
+
+.gq-ledger-clear {
+    display: block;
+    margin-top: 12rpx;
+    text-align: right;
+    font-size: 21rpx;
+    color: #a08c68;
+}
+
+.atlas-tip-strong {
+    color: #a8642f;
+    font-weight: 700;
+}
+
+/* ===== 图谱原文卡（长按） ===== */
+.peek-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(30, 20, 12, 0.5);
+    z-index: 999;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.peek-card {
+    width: 100%;
+    max-height: 82vh;
+    background: #fdf9ef;
+    border-radius: 28rpx 28rpx 0 0;
+    padding: 34rpx 32rpx 44rpx;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    animation: peekUp 0.24s ease;
+}
+
+@keyframes peekUp {
+    from {
+        transform: translateY(60rpx);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.peek-title {
+    font-size: 34rpx;
+    color: #5c2018;
+    letter-spacing: 2rpx;
+    margin-bottom: 14rpx;
+}
+
+.peek-fig {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200rpx;
+    margin-bottom: 8rpx;
+}
+
+.peek-scroll {
+    width: 100%;
+    max-height: 320rpx;
+}
+
+.peek-desc {
+    display: block;
+    font-size: 27rpx;
+    color: #4b4438;
+    line-height: 1.9;
+}
+
+.peek-src {
+    display: block;
+    align-self: flex-end;
+    font-size: 21rpx;
+    color: #a08c68;
+    margin-top: 8rpx;
+}
+
+.peek-btns {
+    display: flex;
+    gap: 22rpx;
+    margin-top: 22rpx;
+    width: 100%;
+}
+
+.peek-btn {
+    flex: 1;
+    text-align: center;
+    padding: 18rpx 0;
+    border-radius: 14rpx;
+    font-size: 26rpx;
+}
+
+.peek-btn.ghost {
+    border: 1px solid rgba(139, 58, 58, 0.4);
+    color: #8b3a3a;
+}
+
+.peek-btn.solid {
+    background: #8b3a3a;
+    color: #fffdf7;
 }
 
 /* ---- 症状搜索 ---- */

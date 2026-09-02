@@ -1,6 +1,6 @@
 <template>
     <!-- 望诊示意图：面色 / 望神 / 目 / 唇 / 小儿指纹 / 舌面分部 -->
-    <svg class="wang-svg" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <svg class="wang-svg" :class="{ big }" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <!-- ============ 面色 ============ -->
         <g v-if="face">
             <circle cx="60" cy="64" r="36" :fill="face.skin" />
@@ -93,7 +93,8 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-    kind: { type: String, default: 'face-bai' }
+    kind: { type: String, default: 'face-bai' },
+    big: { type: Boolean, default: false }
 })
 
 const FACE = {
@@ -125,6 +126,11 @@ const zones = computed(() => props.kind === 'zones')
     width: 104rpx;
     height: 104rpx;
     flex-shrink: 0;
+}
+
+.wang-svg.big {
+    width: 240rpx;
+    height: 240rpx;
 }
 
 .fz {

@@ -1,6 +1,6 @@
 <template>
     <!-- 脉象示意图：下方指位（寸关尺）+ 上方脉搏波形（浮沉深浅/迟数密度/形流利度/结代促节律） -->
-    <svg class="pulse-svg" viewBox="0 0 200 128" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <svg class="pulse-svg" :class="{ big }" viewBox="0 0 200 128" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <!-- 波形区网格：上浅下深 -->
         <line x1="8" y1="14" x2="192" y2="14" stroke="rgba(140,120,90,0.25)" stroke-dasharray="3 4" />
         <line x1="8" y1="44" x2="192" y2="44" stroke="rgba(140,120,90,0.25)" stroke-dasharray="3 4" />
@@ -32,7 +32,8 @@
 import { computed } from 'vue'
 
 const props = defineProps({
-    term: { type: String, default: '' }
+    term: { type: String, default: '' },
+    big: { type: Boolean, default: false }
 })
 
 // depth=浮沉(0最浅 60最深) rate=迟数 amp=振幅 width=粗细 jag=艰涩抖动 gap=停搏窗口
@@ -97,6 +98,11 @@ const dur = computed(() => (3.6 / cfg.value.rate).toFixed(2) + 's')
     width: 200rpx;
     height: 128rpx;
     flex-shrink: 0;
+}
+
+.pulse-svg.big {
+    width: 420rpx;
+    height: 268rpx;
 }
 
 .grid-t {

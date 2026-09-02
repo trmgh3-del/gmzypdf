@@ -46,7 +46,9 @@ const defaults = {
         // 模考成绩: [{ t, n 题数, k 答出数, s 用时秒 }]（新→旧，上限 30 条）
         mockHistory: [],
         // 医案辨题记分: { done, ok }
-        diagQuiz: { done: 0, ok: 0 }
+        diagQuiz: { done: 0, ok: 0 },
+        // 诊法图谱账本: { 术语: { see 查原文, gqOk 图考对, gqNo 图考错 } }
+        atlasStats: {}
     }
 }
 
@@ -73,6 +75,7 @@ function loadInitial() {
                 if (Array.isArray(L.diagHistory)) init.learn.diagHistory = L.diagHistory
                 if (Array.isArray(L.mockHistory)) init.learn.mockHistory = L.mockHistory
                 if (L.diagQuiz) init.learn.diagQuiz = Object.assign({ done: 0, ok: 0 }, L.diagQuiz)
+                if (L.atlasStats && typeof L.atlasStats === 'object') init.learn.atlasStats = L.atlasStats
             }
         }
     } catch (e) {
@@ -358,6 +361,18 @@ export function pushDiagRecord(rec) {
 
 export function clearDiagHistory() {
     store.learn.diagHistory = []
+}
+
+// ---- 诊法图谱账本（查原文 / 图考对错）----
+export function bumpAtlasStat(term, field) {
+    const s = store.learn
+    if (!s.atlasStats) s.atlasStats = {}
+    if (!s.atlasStats[term]) s.atlasStats[term] = { see: 0, gqOk: 0, gqNo: 0 }
+    s.atlasStats[term][field] = (s.atlasStats[term][field] || 0) + 1
+}
+
+export function clearAtlasStats() {
+    store.learn.atlasStats = {}
 }
 
 // ---- 学习总览 ----
