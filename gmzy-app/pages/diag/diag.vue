@@ -6,10 +6,33 @@
             <text class="notice-text">{{ rules.disclaimer || DEFAULT_DISCLAIMER }}</text>
         </view>
 
+        <!-- 红旗：急重症征象提示 -->
+        <view v-if="redFlags.length" class="redflag">
+            <text class="redflag-icon">‼</text>
+            <text class="redflag-text">已勾选急重症征象（{{ redFlags.map((f) => f.label).join('、') }}）。辨证练习可继续；<text class="redflag-bold">若为真实不适，请立即就医，切勿自我处理</text>。</text>
+        </view>
+
         <template v-if="step === 'pick'">
             <view class="guide">
                 <text class="guide-title serif-font">勾选所见症状与舌脉</text>
-                <text class="guide-text">已选 {{ selectedCount }} 项 · 建议 5~12 项，舌脉尽量勾选</text>
+                <text class="guide-text">已选 {{ selectedCount }} 项 · 建议 5~12 项，舌脉尽量勾选 · 长按舌/脉可看图谱对照</text>
+            </view>
+
+            <!-- 症状搜索 -->
+            <view class="symbar">
+                <input v-model.trim="kw" class="sym-input" placeholder="搜索症状：如 咳嗽 / 脉浮 / 盗汗" confirm-type="search" />
+            </view>
+            <view v-if="kw" class="chips search-hits">
+                <block v-if="kwHits.length">
+                    <text
+                        v-for="it in kwHits"
+                        :key="it.id"
+                        class="chip"
+                        :class="{ on: selected[it.id] }"
+                        @tap="toggleItem(it.id)"
+                    ><text class="chip-g">{{ it.gname }}·</text>{{ it.label }}</text>
+                </block>
+                <text v-else class="search-empty">没有匹配「{{ kw }}」的症状</text>
             </view>
 
             <view v-for="g in rules.groups" :key="g.id" class="group">
@@ -25,8 +48,9 @@
                         v-for="it in g.items"
                         :key="it.id"
                         class="chip"
-                        :class="{ on: selected[it.id], hot: it.freq >= 0.45 }"
+                        :class="{ on: selected[it.id], hot: it.freq >= 0.45, tip: it.id in symTip }"
                         @tap="toggleItem(it.id)"
+                        @longpress="showAtlasTip(it)"
                     >{{ it.label }}<text v-if="it.freq >= 0.45" class="hot-dot"> 热</text></text>
                 </view>
             </view>
@@ -37,9 +61,70 @@
                     开始辨证{{ selectedCount < 3 ? '（再选几项）' : '' }}
                 </button>
             </view>
+
+            <!-- 医案辨证入口 -->
+            <view class="case-entry" @tap="startCase">
+                <view class="ce-left">
+                    <text class="ce-in serif-font">🩺 医案辨证</text>
+                    <text class="ce-desc">真实医案抽考：看案选证型，每次 10 题</text>
+                </view>
+                <text class="ce-op serif-font">开考 ›</text>
+            </view>
+            <text class="ce-acc" v-if="(store.learn.diagQuiz || {}).done">累计 {{ dqAcc }} 正确</text>
         </template>
 
-        <template v-else>
+        <!-- 医案辨证做题 -->
+        <template v-else-if="step === 'case'">
+            <view class="result-head">
+                <button class="btn ghost" @tap="step = 'pick'">‹ 返回勾选</button>
+                <text class="result-count serif-font">{{ casePos + 1 }} / {{ caseTotal }}</text>
+                <text class="case-round serif-font">对 {{ caseOk }}</text>
+            </view>
+            <view class="case-card">
+                <view class="case-qtag-row">
+                    <text class="qtag">{{ caseCur.src || '医案' }}</text>
+                    <text class="case-seq serif-font">{{ casePos + 1 }}/{{ caseTotal }}</text>
+                </view>
+                <scroll-view scroll-y class="case-scroll">
+                    <text class="case-text serif-font">{{ caseCur.q }}</text>
+                </scroll-view>
+                <view class="case-choices">
+                    <view
+                        v-for="c in caseCur.choices"
+                        :key="c"
+                        class="case-choice"
+                        :class="{ right: casePicked && c === caseCur.an, wrong: casePicked === c && c !== caseCur.an }"
+                        @tap="pickCase(c)"
+                    >
+                        <text class="case-choice-t">{{ c }}</text>
+                        <text v-if="casePicked && c === caseCur.an" class="case-mark">✓ 正解</text>
+                        <text v-else-if="casePicked === c" class="case-mark bad">✗</text>
+                    </view>
+                </view>
+                <view class="case-foot">
+                    <text v-if="!casePicked" class="case-hint">细读医案，选出最贴合的证型</text>
+                    <button v-else class="btn primary case-next" @tap="nextCase">
+                        {{ casePos + 1 >= caseTotal ? '查看本组成绩' : '下一题 ›' }}
+                    </button>
+                </view>
+            </view>
+
+            <!-- 本组成绩 -->
+            <view v-if="caseDone" class="case-mask">
+                <view class="case-over">
+                    <text class="co-title serif-font">本组成绩</text>
+                    <text class="co-score serif-font">{{ caseOk }} / {{ caseTotal }}</text>
+                    <text class="co-line">正确率 {{ Math.round((caseOk / caseTotal) * 100) }}% · 累计 {{ dqAcc }}</text>
+                    <view class="co-btns">
+                        <text class="co-btn ghost" @tap="step = 'pick'">返回辨证</text>
+                        <text class="co-btn solid" @tap="startCase">再来一组</text>
+                    </view>
+                </view>
+            </view>
+        </template>
+
+
+        <template v-else-if="step === 'result'">
             <view class="result-head">
                 <button class="btn ghost" @tap="step = 'pick'">‹ 重新勾选</button>
                 <text class="result-count serif-font">共 {{ results.length }} 个提示证型</text>
@@ -185,9 +270,9 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
-import { loadDiagRules, loadDeck, loadDiagAtlas } from '../../common/learn.js'
-import { diagnose, symptomIndex, findVs } from '../../common/diagnosis.js'
-import { store, pending, pushDiagRecord, clearDiagHistory } from '../../common/store.js'
+import { loadDiagRules, loadDeck, loadDiagAtlas, loadDiagQuiz } from '../../common/learn.js'
+import { diagnose, symptomIndex, findVs, RED_FLAGS } from '../../common/diagnosis.js'
+import { store, pending, pushDiagRecord, clearDiagHistory, pushDiagQuiz } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
 
 const DEFAULT_DISCLAIMER = '本功能仅供学习辨证思路参考，不能替代执业医师面诊，如有不适请及时就医。'
@@ -198,6 +283,7 @@ const openGroups = reactive({})
 const step = ref('pick')
 const results = ref([])
 const atlas = ref({ tongue: [], pulse: [] })
+const symTip = {} // 舌/脉症状 id -> atlas 对照文字（长按查看）
 const atlasOpen = ref(false)
 const atlasTab = ref('she')
 const compare = ref(null)
@@ -212,7 +298,54 @@ onLoad(async () => {
     // 默认展开前两组
     if (rules.value.groups[0]) openGroups[rules.value.groups[0].id] = true
     if (rules.value.groups[1]) openGroups[rules.value.groups[1].id] = true
+    // 舌/脉 长按对照（atlas 术语 ↔ 症状标签 模糊映射）
+    loadDiagAtlas()
+        .then((data) => {
+            atlas.value = data
+            for (const g of rules.value.groups) {
+                const pool = g.name === '舌象' ? data.tongue : g.name === '脉象' ? data.pulse : null
+                if (!pool) continue
+                for (const it of g.items) {
+                    let best = null
+                    let bs = 0
+                    for (const e of pool) {
+                        let s = 0
+                        for (const ch of e.term.replace(/[·（）]/g, '')) if (it.label.includes(ch)) s += 1
+                        for (const ch of it.label.replace(/[、·（）或有无之沉数细]/g, '')) if (e.term.includes(ch)) s += 0.5
+                        if (s > bs) {
+                            bs = s
+                            best = e
+                        }
+                    }
+                    if (best && bs >= 2) symTip[it.id] = `${best.term}：${best.desc}——${best.src}`
+                }
+            }
+        })
+        .catch(() => {})
 })
+
+// ---- 症状搜索 ----
+const kw = ref('')
+const kwHits = computed(() => {
+    const k = kw.value.trim()
+    if (!k) return []
+    const out = []
+    for (const g of rules.value.groups) {
+        for (const it of g.items) {
+            if (it.label.includes(k)) out.push({ ...it, gname: g.name })
+            if (out.length >= 24) return out
+        }
+    }
+    return out
+})
+
+// ---- 红旗急重症 ----
+const redFlags = computed(() => RED_FLAGS.filter((f) => selected[f.id]))
+
+function showAtlasTip(it) {
+    if (!(it.id in symTip)) return
+    uni.showModal({ title: it.label, content: symTip[it.id], showCancel: false, confirmText: '知道了' })
+}
 
 onShow(() => {
     night.value = applyNavTheme()
@@ -280,6 +413,55 @@ function run() {
             top: { name: out[0].name, pct: out[0].pct }
         })
     }
+    uni.pageScrollTo({ scrollTop: 0, duration: 0 })
+}
+
+// ---- 医案辨证（看案选证）----
+const caseQueue = ref([])
+const casePos = ref(0)
+const caseOk = ref(0)
+const casePicked = ref('')
+const caseDone = ref(false)
+const caseCur = computed(() => caseQueue.value[casePos.value] || {})
+const caseTotal = computed(() => caseQueue.value.length || 10)
+const dqAcc = computed(() => {
+    const d = store.learn.diagQuiz || { done: 0, ok: 0 }
+    return `${d.ok}/${d.done}`
+})
+
+async function startCase() {
+    const quiz = await loadDiagQuiz()
+    const arr = quiz.items.slice()
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        const t = arr[i]
+        arr[i] = arr[j]
+        arr[j] = t
+    }
+    caseQueue.value = arr.slice(0, 10)
+    casePos.value = 0
+    caseOk.value = 0
+    casePicked.value = ''
+    caseDone.value = false
+    step.value = 'case'
+    uni.pageScrollTo({ scrollTop: 0, duration: 0 })
+}
+
+function pickCase(c) {
+    if (casePicked.value) return
+    casePicked.value = c
+    const ok = c === caseCur.value.an
+    if (ok) caseOk.value++
+    pushDiagQuiz(ok)
+}
+
+function nextCase() {
+    if (casePos.value + 1 >= caseQueue.value.length) {
+        caseDone.value = true
+        return
+    }
+    casePos.value++
+    casePicked.value = ''
     uni.pageScrollTo({ scrollTop: 0, duration: 0 })
 }
 
@@ -862,4 +1044,145 @@ function fmt(ts) {
     color: #b9ac92;
     flex-shrink: 0;
 }
+
+.qtag {
+    font-size: 22rpx;
+    color: #b09a77;
+}
+
+/* ---- 红旗急重症 ---- */
+.redflag {
+    display: flex;
+    align-items: flex-start;
+    gap: 12rpx;
+    background: #fdeceb;
+    border: 2rpx solid #e8a09a;
+    border-radius: 14rpx;
+    padding: 18rpx 22rpx;
+    margin-bottom: 20rpx;
+}
+
+.redflag-icon { font-size: 30rpx; color: #b5242a; }
+
+.redflag-text { font-size: 24rpx; color: #7c2f26; line-height: 1.6; flex: 1; }
+.redflag-bold { color: #b5242a; font-weight: 700; }
+
+/* ---- 症状搜索 ---- */
+.symbar {
+    margin-bottom: 14rpx;
+}
+
+.sym-input {
+    background: #fffdf7;
+    border: 2rpx solid #e4dcc8;
+    border-radius: 14rpx;
+    padding: 14rpx 22rpx;
+    font-size: 26rpx;
+    color: #3a3226;
+    height: 66rpx;
+}
+
+.search-hits { margin-bottom: 20rpx; }
+.chip-g { color: #b9ac92; font-size: 21rpx; }
+.search-empty { font-size: 24rpx; color: #8d8371; padding: 16rpx 6rpx; }
+
+.chip.tip { border-style: dashed; }
+
+/* ---- 医案辨证入口 ---- */
+.case-entry {
+    margin-top: 22rpx;
+    background: #fffdf7;
+    border: 2rpx solid #e4dcc8;
+    border-radius: 18rpx;
+    padding: 24rpx 26rpx;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.ce-in { font-size: 30rpx; color: #5c2018; font-weight: 700; }
+.ce-desc { font-size: 22rpx; color: #8d8371; margin-top: 6rpx; }
+.ce-op { font-size: 26rpx; color: #8b3a3a; }
+.ce-acc { font-size: 21rpx; color: #a39880; text-align: right; margin-top: 8rpx; display: block; }
+
+/* ---- 医案辨证做题 ---- */
+.case-round { font-size: 26rpx; color: #8b3a3a; }
+
+.case-card {
+    background: #fffdf7;
+    border: 2rpx solid #e4dcc8;
+    border-radius: 20rpx;
+    padding: 26rpx 26rpx 20rpx;
+    display: flex;
+    flex-direction: column;
+}
+
+.case-qtag-row {
+    flex-direction: row;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12rpx;
+}
+
+.case-seq { font-size: 24rpx; color: #a39880; }
+
+.case-scroll { max-height: 46vh; }
+
+.case-text { font-size: 29rpx; line-height: 1.95; color: #3a3226; }
+
+.case-choices { margin-top: 22rpx; display: flex; flex-direction: column; gap: 14rpx; }
+
+.case-choice {
+    border: 2rpx solid #e4dcc8;
+    border-radius: 14rpx;
+    padding: 18rpx 22rpx;
+    flex-direction: row;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.case-choice.right { border-color: #4a8c5c; background: rgba(74, 140, 92, 0.1); }
+.case-choice.wrong { border-color: #c45454; background: rgba(196, 84, 84, 0.08); }
+
+.case-choice-t { font-size: 27rpx; color: #3a3226; }
+.case-mark { font-size: 23rpx; color: #4a8c5c; }
+.case-mark.bad { color: #c45454; }
+
+.case-foot { margin-top: 22rpx; display: flex; justify-content: center; }
+.case-hint { font-size: 22rpx; color: #a39880; }
+.case-next { width: 100%; }
+
+.case-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(36, 24, 18, 0.55);
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40rpx;
+}
+
+.case-over {
+    width: 100%;
+    background: #fdfaf3;
+    border-radius: 24rpx;
+    padding: 44rpx 34rpx 34rpx;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.co-title { font-size: 26rpx; color: #8d8371; letter-spacing: 10rpx; }
+.co-score { font-size: 92rpx; color: #5c2018; font-weight: 700; margin-top: 10rpx; }
+.co-line { font-size: 25rpx; color: #6b5d4f; margin-top: 8rpx; }
+
+.co-btns { flex-direction: row; display: flex; gap: 20rpx; margin-top: 30rpx; }
+
+.co-btn { font-size: 27rpx; border-radius: 14rpx; padding: 16rpx 36rpx; }
+.co-btn.ghost { border: 1rpx solid #c9bfa8; color: #8d8371; }
+.co-btn.solid { background: #8b3a3a; color: #f3e9d2; }
 </style>

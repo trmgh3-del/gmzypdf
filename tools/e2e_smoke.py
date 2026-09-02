@@ -131,6 +131,40 @@ if not os.path.isfile(os.path.join(ROOT, 'tools/build_pwa.py')):
     err('缺少 tools/build_pwa.py')
 print('  模考/划线/反向/长辈/PWA 接线齐全')
 
+# 8) 辨证系统增强
+print('\n[8] 辨证系统增强（vs/医案/反证/医案考）')
+vs = rules.get('vs', [])
+if len(vs) < 18:
+    err(f'鉴别对仅 {len(vs)} < 18')
+neg = [(z['id'], k, w) for z in rules['syndromes'] for k, w in z['w'].items() if w < 0]
+if len(neg) < 25:
+    err(f'反证负权重仅 {len(neg)} < 25')
+med_n = sum(1 for z in rules['syndromes'] if z.get('med'))
+if med_n < 38:
+    err(f'医案覆盖 {med_n}/45 < 38')
+dq = load('diag', 'diag-quiz.json')
+if dq.get('count', 0) < 40 or len(dq.get('items', [])) < 40:
+    err(f'看案辨证题库 {len(dq.get("items", []))} < 40')
+zname = {z['id']: z['name'] for z in rules['syndromes']}
+for it in dq.get('items', []):
+    if it.get('a') not in zname:
+        err(f'看案辨证答案越界 {it.get("a")}')
+        break
+    if len(it.get('choices', [])) != 4 or it.get('an') not in it.get('choices', []):
+        err(f'看案辨证选项异常: {it.get("an")}')
+        break
+    if it['an'] in it['q']:
+        err(f'看案辨证泄题: {it["an"]}')
+        break
+diagvue = open(os.path.join(APP, 'pages/diag/diag.vue'), encoding='utf-8').read()
+for key in ('RED_FLAGS', 'redflag', 'kwHits', 'showAtlasTip', 'startCase', 'pickCase', 'pushDiagQuiz'):
+    if key not in diagvue:
+        err(f'diag.vue 缺少 {key}')
+diagjs = open(os.path.join(APP, 'common/diagnosis.js'), encoding='utf-8').read()
+if 'against' not in diagjs or 'RED_FLAGS' not in diagjs:
+    err('diagnosis.js 缺少反证/红旗')
+print(f'  鉴别 {len(vs)} 对 · 反证 {len(neg)} 条 · 医案 {med_n}/45 · 看案辨证 {len(dq.get("items", []))} 题零泄题')
+
 print()
 if fail:
     print(f'FAILED: {len(fail)} 项')

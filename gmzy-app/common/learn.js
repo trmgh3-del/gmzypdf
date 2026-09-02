@@ -66,6 +66,11 @@ export function loadQuizBook(key) {
     return cached(`static/quiz/${key}`)
 }
 
+// ---- 看案辨证题库 ----
+export function loadDiagQuiz() {
+    return cached('static/diag/diag-quiz.json')
+}
+
 // ---- 辨证规则 ----
 export function loadDiagRules() {
     return cached('static/diag/rules.json')

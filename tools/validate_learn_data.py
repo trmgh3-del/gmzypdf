@@ -145,7 +145,7 @@ for s in rules["syndromes"]:
         if k not in sym_ids:
             err(f"证型 {s['id']} 引用未定义症状 {k}")
             bad += 1
-        if not isinstance(w, (int, float)) or w <= 0:
+        if not isinstance(w, (int, float)) or w == 0:
             err(f"证型 {s['id']} 权重异常 {k}={w}")
             bad += 1
     for f_ in ("name", "bj", "zf", "fang", "points", "ref", "cat"):

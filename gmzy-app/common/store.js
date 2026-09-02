@@ -44,7 +44,9 @@ const defaults = {
         // 辨证记录: [{ ts, symptoms: [label...], top: { name, pct }, count }]
         diagHistory: [],
         // 模考成绩: [{ t, n 题数, k 答出数, s 用时秒 }]（新→旧，上限 30 条）
-        mockHistory: []
+        mockHistory: [],
+        // 医案辨题记分: { done, ok }
+        diagQuiz: { done: 0, ok: 0 }
     }
 }
 
@@ -70,6 +72,7 @@ function loadInitial() {
                 if (L.activity) init.learn.activity = L.activity
                 if (Array.isArray(L.diagHistory)) init.learn.diagHistory = L.diagHistory
                 if (Array.isArray(L.mockHistory)) init.learn.mockHistory = L.mockHistory
+                if (L.diagQuiz) init.learn.diagQuiz = Object.assign({ done: 0, ok: 0 }, L.diagQuiz)
             }
         }
     } catch (e) {
@@ -142,6 +145,13 @@ export function removeMark(slug, g) {
 export function pushMockResult(entry) {
     store.learn.mockHistory.unshift(Object.assign({ t: Date.now() }, entry))
     if (store.learn.mockHistory.length > 30) store.learn.mockHistory.length = 30
+}
+
+// ---- 医案辨证记分 ----
+export function pushDiagQuiz(ok) {
+    if (!store.learn.diagQuiz) store.learn.diagQuiz = { done: 0, ok: 0 }
+    store.learn.diagQuiz.done++
+    if (ok) store.learn.diagQuiz.ok++
 }
 
 export function clearBookmarks() {
