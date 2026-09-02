@@ -49,6 +49,7 @@ export function diagnose(selectedIds, rules, limit = 4) {
         zf: s.zf,
         fang: s.fang,
         points: s.points,
+        jj: s.jj || '',
         ref: s.ref,
         hit: r.hit,
         total: r.total,
@@ -78,5 +79,11 @@ export const RED_FLAGS = [
     { id: 'dh_br', label: '高热不退' }
 ]
 
-const Diagnosis = { symptomIndex, scoreOne, diagnose, findVs, RED_FLAGS }
+// 险证：辨证结果位列第一时应在结果端再加就医警示（学习练习可继续）
+export const DANGER_SYNS = [
+    'er_jf_re', // 急惊风·热极生风
+    'xue_fen'   // 温病·血分证
+]
+
+const Diagnosis = { symptomIndex, scoreOne, diagnose, findVs, RED_FLAGS, DANGER_SYNS }
 export default Diagnosis

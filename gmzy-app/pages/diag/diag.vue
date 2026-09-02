@@ -160,6 +160,10 @@
                         <text v-else-if="casePicked === c" class="case-mark bad">✗</text>
                     </view>
                 </view>
+                <view v-if="casePicked" class="case-exp">
+                    <text class="case-exp-title serif-font">解析 · {{ caseCur.an }}</text>
+                    <text class="case-exp-text">{{ caseExplain }}</text>
+                </view>
                 <view class="case-foot">
                     <text v-if="!casePicked" class="case-hint">细读医案，选出最贴合的证型</text>
                     <button v-else class="btn primary case-next" @tap="nextCase">
@@ -188,6 +192,17 @@
                 <button class="btn ghost" @tap="step = 'pick'">‹ 重新勾选</button>
                 <text class="result-count serif-font">共 {{ results.length }} 个提示证型</text>
                 <button class="btn ghost" @tap="copyResult">复制结论</button>
+            </view>
+
+            <!-- 险证提示（辨证结果为急重之象） -->
+            <view v-if="dangerResult" class="redflag">
+                <text class="redflag-icon">‼</text>
+                <text class="redflag-text">辨证提示的首位为「{{ results[0].name }}」，属<text class="redflag-bold">急重之象</text>。典籍练习可继续；若为真实症状，请立即就医。</text>
+            </view>
+
+            <!-- 兼证并见提示 -->
+            <view v-if="comboHint" class="combo-hint">
+                <text class="combo-text">「{{ comboHint.a }}」与「{{ comboHint.b }}」吻合度均逾六成，或两证相兼并见，施治常需兼顾。</text>
             </view>
 
             <view
@@ -230,6 +245,10 @@
                     <view class="rrow">
                         <text class="rkey">代表方</text>
                         <text class="rval accent" @tap="goFang(r)">{{ r.fang }} ›</text>
+                    </view>
+                    <view class="rrow" v-if="r.jj">
+                        <text class="rkey">随证加减</text>
+                        <text class="rval jj-text">{{ r.jj }}</text>
                     </view>
                     <view class="rrow">
                         <text class="rkey">参考穴</text>
@@ -299,13 +318,17 @@
                 </view>
                 <view v-for="it in (atlasTab === 'she' ? atlas.tongue : atlas.pulse)" :key="it.term"
                     class="atlas-item" @tap="atlasGo(it)">
-                    <view class="atlas-head">
-                        <text class="atlas-term serif-font">{{ it.term }}</text>
-                        <text class="atlas-src">{{ it.src }} ›</text>
+                    <TongueSvg v-if="atlasTab === 'she'" :term="it.term" />
+                    <PulseSvg v-else :term="it.term" />
+                    <view class="atlas-main">
+                        <view class="atlas-head">
+                            <text class="atlas-term serif-font">{{ it.term }}</text>
+                            <text class="atlas-src">{{ it.src }} ›</text>
+                        </view>
+                        <text class="atlas-desc">{{ it.desc }}</text>
                     </view>
-                    <text class="atlas-desc">{{ it.desc }}</text>
                 </view>
-                <text class="atlas-tip">内容遵循传统教材描述，仅供学习参考。</text>
+                <text class="atlas-tip">示意图为程序化风格绘制，重在辨识要点；内容遵循传统教材描述，仅供学习参考。</text>
             </view>
         </view>
 
@@ -330,9 +353,11 @@
 import { ref, reactive, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { loadDiagRules, loadDeck, loadDiagAtlas, loadDiagQuiz, loadDiagGuide } from '../../common/learn.js'
-import { diagnose, symptomIndex, findVs, RED_FLAGS } from '../../common/diagnosis.js'
+import { diagnose, symptomIndex, findVs, RED_FLAGS, DANGER_SYNS } from '../../common/diagnosis.js'
 import { store, pending, pushDiagRecord, clearDiagHistory, pushDiagQuiz, quizMistakes, setQuizAnswer } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
+import TongueSvg from '../../components/TongueSvg.vue'
+import PulseSvg from '../../components/PulseSvg.vue'
 
 const DEFAULT_DISCLAIMER = '本功能仅供学习辨证思路参考，不能替代执业医师面诊，如有不适请及时就医。'
 
@@ -449,6 +474,10 @@ function clearAll() {
     for (const k of Object.keys(selected)) delete selected[k]
 }
 
+// 险证横幅与兼证提示
+const dangerResult = computed(() => !!(results.value[0] && DANGER_SYNS.includes(results.value[0].id)))
+const comboHint = ref(null)
+
 function run() {
     const out = diagnose(Object.keys(selected), rules.value, 4)
     results.value = out.map((r) => reactive({ ...r, _open: false }))
@@ -457,6 +486,9 @@ function run() {
     for (const r of results.value) {
         buildChain(r)
     }
+    // 双证并见提示：Top2 均达 60% 以上，提示相兼
+    comboHint.value =
+        out.length >= 2 && out[0].pct >= 60 && out[1].pct >= 60 ? { a: out[0].name, b: out[1].name } : null
     // 前两名接近（分差<15%）且有人工鉴别要点时，给出鉴别提示
     compare.value = null
     if (out.length >= 2 && out[0].pct - out[1].pct < 15) {
@@ -634,6 +666,17 @@ function pickCase(c) {
     if (caseCur.value.u) setQuizAnswer('_diag_', caseCur.value.u, ok)
 }
 
+// 医案考解析：正解证型的病机与治法（rules 运行时查，零冗余数据）
+const zByName = computed(() => {
+    const m = {}
+    ;(rules.value.syndromes || []).forEach((z) => { m[z.name] = z })
+    return m
+})
+const caseExplain = computed(() => {
+    const z = zByName.value[caseCur.value.an]
+    return z ? `病机：${z.bj}　治法：${z.zf}` : ''
+})
+
 function nextCase() {
     if (casePos.value + 1 >= caseQueue.value.length) {
         caseDone.value = true
@@ -710,10 +753,23 @@ function clearHis() {
 
 function replay(h) {
     uni.showModal({
-        title: '辨证提示：' + h.top.name,
-        content: `吻合度 ${h.top.pct}%\n当时勾选 ${h.count} 项：${h.symptoms.join('、')}${h.count > 10 ? '…' : ''}`,
-        showCancel: false,
-        confirmColor: '#8b3a3a'
+        title: '还原该次辨证练习',
+        content: `${h.symptoms.join('、')}${h.count > 10 ? ' …（历史仅索引前 10 项）' : ''}`,
+        confirmText: '恢复重练',
+        cancelText: '取消',
+        confirmColor: '#8b3a3a',
+        success: (r) => {
+            if (!r.confirm) return
+            // 标签 → id 的反向索引
+            const labelToId = {}
+            for (const id of Object.keys(idxMap)) labelToId[idxMap[id]] = id
+            Object.keys(selected).forEach((k) => delete selected[k])
+            h.symptoms.forEach((label) => {
+                const id = labelToId[label]
+                if (id) selected[id] = true
+            })
+            run()
+        }
     })
 }
 
@@ -892,11 +948,19 @@ function fmt(ts) {
 .atlas-sec { margin-top: 28rpx; }
 .atlas-seg { margin-bottom: 16rpx; }
 .atlas-item {
+    flex-direction: row;
+    display: flex;
+    align-items: center;
+    gap: 20rpx;
     background: #fffdf5;
     border-radius: 14rpx;
     padding: 20rpx 24rpx;
     margin-bottom: 14rpx;
     border: 1px solid rgba(139, 58, 58, 0.06);
+}
+
+.atlas-main {
+    flex: 1;
 }
 .atlas-head {
     display: flex;
@@ -1245,6 +1309,36 @@ function fmt(ts) {
 
 .redflag-text { font-size: 24rpx; color: #7c2f26; line-height: 1.6; flex: 1; }
 .redflag-bold { color: #b5242a; font-weight: 700; }
+
+/* 兼证并见提示 */
+.combo-hint {
+    background: rgba(200, 147, 47, 0.1);
+    border: 2rpx solid rgba(200, 147, 47, 0.45);
+    border-radius: 14rpx;
+    padding: 16rpx 22rpx;
+    margin-bottom: 18rpx;
+}
+
+.combo-text { font-size: 24rpx; color: #7a5a1f; line-height: 1.6; }
+
+.jj-text { color: #5a5346; }
+
+/* 医案考解析 */
+.case-exp {
+    margin-top: 20rpx;
+    border-top: 1rpx dashed #e4dcc8;
+    padding-top: 16rpx;
+}
+
+.case-exp-title { font-size: 26rpx; color: #5c2018; font-weight: 700; }
+
+.case-exp-text {
+    display: block;
+    font-size: 24rpx;
+    color: #6b5d4f;
+    line-height: 1.8;
+    margin-top: 8rpx;
+}
 
 /* ---- 症状搜索 ---- */
 .symbar {

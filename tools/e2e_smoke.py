@@ -212,6 +212,23 @@ if any('u' not in it or not str(it['u']).startswith('dq:') for it in items):
     err('看案辨证题库缺稳定题号 u')
 print(f'  问诊轨道 {len(tracks)} 条 · {n_step} 问 · 分支 {n_branch} 处 · 医案错题回看已接线')
 
+# 10) 论治加减 / SVG 图谱 / 结果端兜底
+print('\n[10] 论治加减·SVG图谱·结果端兜底')
+jj_n = sum(1 for z in rules['syndromes'] if z.get('jj'))
+if jj_n < 45:
+    err(f'随证加减覆盖 {jj_n}/45 < 45')
+for key in ('dangerResult', 'comboHint', 'caseExplain', '恢复重练', 'TongueSvg', 'PulseSvg'):
+    if key not in diagvue:
+        err(f'diag.vue 缺少 {key}')
+for comp in ('TongueSvg', 'PulseSvg'):
+    p = os.path.join(APP, 'components', comp + '.vue')
+    if not os.path.isfile(p):
+        err(f'缺少组件 {comp}.vue')
+diagjs2 = open(os.path.join(APP, 'common/diagnosis.js'), encoding='utf-8').read()
+if 'DANGER_SYNS' not in diagjs2:
+    err('diagnosis.js 缺少 DANGER_SYNS')
+print(f'  随证加减 {jj_n}/45 · SVG舌脉组件齐备 · 险证/兼证/解析/历史恢复已接线')
+
 print()
 if fail:
     print(f'FAILED: {len(fail)} 项')
