@@ -1,5 +1,5 @@
 <template>
-    <view class="quiz" :class="{ night, [themeCls]: night }">
+    <view class="quiz" :class="{ night, elder: store.settings.elder, [themeCls]: night }">
         <view v-if="!ready" class="loading">题库加载中…</view>
         <template v-else-if="!queue.length">
             <view class="done-all">
@@ -12,7 +12,11 @@
             <view v-if="chapMode" class="chap-tip serif-font">📖 {{ chapRange.title }}</view>
             <view class="topbar">
                 <text class="counter serif-font">{{ pos + 1 }} / {{ queue.length }}</text>
-                <view class="seg">
+                <template v-if="mockMode">
+                    <text class="mock-clock serif-font" :class="{ urgent: mockLeft <= 300 }">⏱ {{ mmss }}</text>
+                    <text class="mock-submit" @tap="submitMock(true)">交卷</text>
+                </template>
+                <view v-else class="seg">
                     <text
                         v-for="f in FILTERS"
                         :key="f.key"
@@ -22,6 +26,9 @@
                     >{{ f.name }}</text>
                 </view>
             </view>
+
+            <!-- 模考交卷结果 -->
+
 
             <view class="qcard">
                 <view class="qtag-row">
@@ -50,11 +57,11 @@
 
             <view class="nav-row">
                 <text class="nav-btn" @tap="prev">‹ 上一题</text>
-                <text class="nav-btn warn" v-if="stats.done" @tap="confirmReset">重置本书进度</text>
+                <text class="nav-btn warn" v-if="stats.done && !mockMode" @tap="confirmReset">重置本书进度</text>
                 <text class="nav-btn" @tap="next">下一题 ›</text>
             </view>
 
-            <view class="foot">
+            <view class="foot" v-if="!mockMode">
                 <view class="foot-line">
                     <text>已答 {{ stats.done || 0 }} 题 · 记住 {{ stats.know || 0 }} · 待巩固 {{ stats.dont || 0 }}</text>
                 </view>
@@ -74,14 +81,37 @@
                     薄弱区间：{{ weakChap.chapter }}（错 {{ weakChap.n }} 题，点我专攻）
                 </view>
             </view>
+
+            <!-- 模考交卷结果 -->
+            <view v-if="mockSubmitted" class="mock-mask">
+                <view class="mock-card">
+                    <text class="mk-title serif-font">交 卷</text>
+                    <text class="mk-score serif-font">{{ mockResult.k }} / {{ mockResult.n }}</text>
+                    <text class="mk-acc">答出率 {{ mockRate }}% · 用时 {{ mockUsedText }}</text>
+                    <text class="mk-hist" v-if="pastMocks.n">历史 {{ pastMocks.n }} 场 · 场均答出率 {{ pastMocks.avg }}%</text>
+                    <scroll-view scroll-y class="mk-wrong" v-if="mockWrong.length">
+                        <view v-for="w in mockWrong" :key="w.u" class="mk-wrong-row">
+                            <text class="mk-wrong-q">{{ w.chapter ? w.chapter + ' · ' : '' }}{{ w.q }}</text>
+                            <text v-if="w.book && w.g !== null && w.g !== undefined" class="mk-wrong-src" @tap="goSourceOf(w)">📖 原文 ›</text>
+                        </view>
+                    </scroll-view>
+                    <text v-else class="mk-perfect serif-font">满分！无一错漏</text>
+                    <view class="mk-btns">
+                        <text class="mk-btn ghost" @tap="goStats">成绩曲线 ›</text>
+                        <text class="mk-btn ghost" @tap="exitPage">返回</text>
+                        <text class="mk-btn solid" @tap="again">再来一套</text>
+                    </view>
+                    <text class="mk-note">本次作答已并入日常进度；未答出的题目自动进入「待巩固」</text>
+                </view>
+            </view>
         </template>
     </view>
 </template>
 
 <script setup>
 import { ref, reactive, computed } from 'vue'
-import { onLoad, onShow } from '@dcloudio/uni-app'
-import { loadQuizBook, migrateLegacyLearn } from '../../common/learn.js'
+import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
+import { loadQuizBook, loadQuizIndex, migrateLegacyLearn } from '../../common/learn.js'
 import {
     store,
     setQuizAnswer,
@@ -90,7 +120,8 @@ import {
     hasLegacyKeys,
     markMigrated,
     quizMistakes,
-    quizDailySeries
+    quizDailySeries,
+    pushMockResult
 } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
 
@@ -108,6 +139,117 @@ const missedCount = ref(0)
 const daySeries = ref([])
 const chapMode = ref(false)
 const chapRange = reactive({ s: 0, e: 0, title: '' })
+
+// ---- 综合模考 ----
+const mockMode = ref(false)
+const mockAns = reactive({}) // u -> 1 答出 | 2 未答出
+const mockLeft = ref(0)      // 剩余秒
+const mockInit = ref(0)      // 初始秒
+const mockSubmitted = ref(false)
+const mockResult = reactive({ n: 0, k: 0, sec: 0 })
+let mockTimer = null
+
+const mmss = computed(() => {
+    const s = Math.max(0, mockLeft.value)
+    return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+})
+const mockRate = computed(() => (mockResult.n ? Math.round((mockResult.k / mockResult.n) * 100) : 0))
+const mockUsedText = computed(() => `${String(Math.floor(mockResult.sec / 60)).padStart(2, '0')}:${String(mockResult.sec % 60).padStart(2, '0')}`)
+const mockWrong = computed(() => (mockSubmitted.value ? list.value.filter((it) => mockAns[it.u] !== 1) : []))
+// 交卷后，历史成绩含本场；过往场次从第 2 条起
+const pastMocks = computed(() => {
+    const past = store.learn.mockHistory.slice(1)
+    if (!past.length) return { n: 0, avg: 0 }
+    const avg = Math.round((past.reduce((s, m) => s + (m.n ? m.k / m.n : 0), 0) / past.length) * 100)
+    return { n: past.length, avg }
+})
+
+async function setupMock() {
+    const idx = await loadQuizIndex()
+    const arr = []
+    for (const meta of idx) {
+        try {
+            const book = await loadQuizBook(meta.f)
+            book.forEach((it) => arr.push(Object.assign({}, it, { _bk: meta.f })))
+        } catch (e) { /* 单卷损坏时跳过 */ }
+    }
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        const t = arr[i]
+        arr[i] = arr[j]
+        arr[j] = t
+    }
+    list.value = arr.slice(0, Math.min(30, arr.length))
+    queue.value = list.value.map((_, i) => i)
+    pos.value = 0
+    Object.keys(mockAns).forEach((k) => delete mockAns[k])
+    mockSubmitted.value = false
+    mockInit.value = Math.min(1500, list.value.length * 50)
+    mockLeft.value = mockInit.value
+}
+
+function startMockTimer() {
+    stopMockTimer()
+    mockTimer = setInterval(() => {
+        if (mockLeft.value > 0) {
+            mockLeft.value--
+            if (mockLeft.value === 0) submitMock(false)
+        }
+    }, 1000)
+}
+
+function stopMockTimer() {
+    if (mockTimer) {
+        clearInterval(mockTimer)
+        mockTimer = null
+    }
+}
+
+function submitMock(manual) {
+    if (mockSubmitted.value) return
+    if (!manual) return doSubmit()
+    const unanswered = list.value.filter((it) => !mockAns[it.u]).length
+    uni.showModal({
+        title: '交卷',
+        content: unanswered ? `还有 ${unanswered} 题未作答，未作答按未答出计。确定交卷吗？` : '确定交卷吗？',
+        confirmText: '交卷',
+        confirmColor: '#8b3a3a',
+        success: (r) => r.confirm && doSubmit()
+    })
+}
+
+function doSubmit() {
+    if (mockSubmitted.value) return
+    mockSubmitted.value = true
+    stopMockTimer()
+    let k = 0
+    list.value.forEach((it) => {
+        const a = mockAns[it.u] || 2
+        if (a === 1) k++
+        setQuizAnswer(it._bk, it.u, a === 1)
+    })
+    const sec = mockInit.value - mockLeft.value
+    mockResult.n = list.value.length
+    mockResult.k = k
+    mockResult.sec = sec
+    pushMockResult({ n: list.value.length, k, s: sec })
+}
+
+function again() {
+    setupMock().then(() => startMockTimer())
+}
+
+function goStats() {
+    uni.navigateTo({ url: '/pages/stats/stats' })
+}
+
+function exitPage() {
+    uni.navigateBack({ fail: () => uni.switchTab({ url: '/pages/learn/learn' }) })
+}
+
+function goSourceOf(w) {
+    uni.navigateTo({ url: `/pages/reader/reader?slug=${w.book}&g=${w.g}` })
+}
 
 const FILTERS = computed(() =>
     chapMode.value
@@ -127,6 +269,17 @@ const FILTERS = computed(() =>
 )
 
 onLoad(async (q) => {
+    if (q && q.mock === '1') {
+        mockMode.value = true
+        bookKey.value = '_mock_'
+        bookTitle.value = '综合模考'
+        uni.setNavigationBarTitle({ title: '综合模考' })
+        if (hasLegacyKeys()) await migrateLegacyLearn(store, markMigrated)
+        await setupMock()
+        startMockTimer()
+        ready.value = true
+        return
+    }
     bookKey.value = decodeURIComponent(q.k || '')
     bookTitle.value = decodeURIComponent(q.title || '')
     if (q.cs !== undefined && q.ce !== undefined) {
@@ -151,6 +304,8 @@ onShow(() => {
     refreshStats()
 })
 
+onUnload(() => stopMockTimer())
+
 function doneMap() {
     return store.learn.quizDone[bookKey.value] || {}
 }
@@ -164,6 +319,7 @@ const cur = computed(() => {
 const state = computed(() => {
     const i = queue.value[pos.value]
     if (i === undefined) return 0
+    if (mockMode.value) return mockAns[list.value[i].u] || 0
     return doneMap()[list.value[i].u] || 0
 })
 
@@ -217,12 +373,21 @@ function setFilter(f) {
 }
 
 function answer(ok) {
+    if (mockMode.value) return mockAnswer(ok)
     const i = queue.value[pos.value]
     if (i === undefined) return
     setQuizAnswer(bookKey.value, list.value[i].u, ok)
     refreshStats()
     if (pos.value < queue.value.length - 1) pos.value++
     else buildQueue()
+}
+
+function mockAnswer(ok) {
+    const i = queue.value[pos.value]
+    if (i === undefined) return
+    mockAns[list.value[i].u] = ok ? 1 : 2
+    if (pos.value < queue.value.length - 1) pos.value++
+    else doSubmit()
 }
 
 function prev() {
@@ -464,5 +629,135 @@ function goSource() {
     padding: 0 40rpx;
     height: 72rpx;
     line-height: 72rpx;
+}
+
+/* ---- 综合模考 ---- */
+.mock-clock {
+    font-size: 30rpx;
+    color: #5c2018;
+    font-weight: 700;
+
+    &.urgent {
+        color: #b5242a;
+    }
+}
+
+.mock-submit {
+    font-size: 25rpx;
+    color: #f3e9d2;
+    background: #8b3a3a;
+    border-radius: 24rpx;
+    padding: 10rpx 30rpx;
+}
+
+.mock-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(36, 24, 18, 0.55);
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40rpx;
+}
+
+.mock-card {
+    width: 100%;
+    max-height: 88vh;
+    background: #fdfaf3;
+    border-radius: 24rpx;
+    padding: 40rpx 34rpx 30rpx;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.mk-title {
+    font-size: 26rpx;
+    color: #8d8371;
+    letter-spacing: 12rpx;
+}
+
+.mk-score {
+    font-size: 88rpx;
+    color: #5c2018;
+    font-weight: 700;
+    margin-top: 8rpx;
+}
+
+.mk-acc {
+    font-size: 26rpx;
+    color: #6b5d4f;
+    margin-top: 6rpx;
+}
+
+.mk-hist {
+    font-size: 22rpx;
+    color: #a39880;
+    margin-top: 4rpx;
+}
+
+.mk-wrong {
+    width: 100%;
+    max-height: 34vh;
+    margin-top: 20rpx;
+    border-top: 1rpx solid #efe8d6;
+}
+
+.mk-wrong-row {
+    padding: 16rpx 4rpx;
+    border-bottom: 1rpx dashed #efe8d6;
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12rpx;
+}
+
+.mk-wrong-q {
+    font-size: 25rpx;
+    color: #3a3226;
+    flex: 1;
+}
+
+.mk-wrong-src {
+    font-size: 22rpx;
+    color: #8b3a3a;
+    flex-shrink: 0;
+}
+
+.mk-perfect {
+    font-size: 30rpx;
+    color: #8b3a3a;
+    margin-top: 24rpx;
+}
+
+.mk-btns {
+    flex-direction: row;
+    display: flex;
+    gap: 18rpx;
+    margin-top: 26rpx;
+}
+
+.mk-btn {
+    font-size: 26rpx;
+    border-radius: 14rpx;
+    padding: 14rpx 30rpx;
+
+    &.ghost {
+        border: 1rpx solid #c9bfa8;
+        color: #8d8371;
+    }
+
+    &.solid {
+        background: #8b3a3a;
+        color: #f3e9d2;
+    }
+}
+
+.mk-note {
+    font-size: 21rpx;
+    color: #a39880;
+    margin-top: 18rpx;
 }
 </style>

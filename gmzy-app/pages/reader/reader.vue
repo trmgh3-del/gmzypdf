@@ -36,9 +36,11 @@
                         :blocks="chapterBlocks(ci)"
                         :slug="slug"
                         :dict-mode="dictMode"
+                        :marks="bookMarks"
                         @img="previewImg"
                         @blk="onDictBlk"
                         @ref="onRefLink"
+                        @mark="onMark"
                     />
                     <view class="chapter-sep">
                         <text class="chapter-sep-t">{{ chapters[ci].title }}</text>
@@ -122,7 +124,7 @@
 import { computed, nextTick, onMounted, ref, getCurrentInstance } from 'vue'
 import { onLoad, onUnload, onBackPress, onShareAppMessage } from '@dcloudio/uni-app'
 import { loadBook, getBookMeta } from '../../common/books.js'
-import { store, saveProgress, pushHistory, addBookmark, pending } from '../../common/store.js'
+import { store, saveProgress, pushHistory, addBookmark, pending, setMark, removeMark } from '../../common/store.js'
 import {
     statusBarHeight, debounce, chapterOf, excerptText
 } from '../../common/util.js'
@@ -179,8 +181,8 @@ const cssVars = computed(() => {
         '--line': t.line,
         '--accent': t.accent,
         '--th-bg': t.thBg,
-        '--fs': settings.fontSize + 'px',
-        '--lh': settings.lineHeight
+        '--fs': settings.fontSize + (settings.elder ? 4 : 0) + 'px',
+        '--lh': settings.lineHeight + (settings.elder ? 0.2 : 0)
     }
 })
 
@@ -407,7 +409,44 @@ function recordJump() {
 }
 
 function toggleBars() {
+    if (Date.now() - lastMarkTs < 700) return // 长按划线后的抬起不算点击
     showBars.value = !showBars.value
+}
+
+// ---- 划线批注 ----
+let lastMarkTs = 0
+const bookMarks = computed(() => store.marks[slug.value] || {})
+
+function onMark({ g, text }) {
+    lastMarkTs = Date.now()
+    const cur = (store.marks[slug.value] || {})[String(g)]
+    const ex = (text || '').slice(0, 42)
+    const items = cur ? ['改标为黄色', '改标为红色', '改标为绿色', '✏️ 批注', '✖ 清除标记'] : ['🟨 黄色高亮', '🟥 红色高亮', '🟩 绿色高亮', '✏️ 批注']
+    uni.showActionSheet({
+        itemList: items,
+        success: (r) => {
+            const colors = ['y', 'r', 'g']
+            if (r.tapIndex <= 2) {
+                setMark(slug.value, g, colors[r.tapIndex], cur ? cur.note : '', ex)
+                showToast('已高亮')
+            } else if (r.tapIndex === 3) {
+                uni.showModal({
+                    title: '批注',
+                    editable: true,
+                    placeholderText: '写点心得…',
+                    content: cur ? cur.note : '',
+                    success: (mm) => {
+                        if (!mm.confirm) return
+                        setMark(slug.value, g, cur ? cur.c : 'y', mm.content || '', ex || (cur ? cur.ex : ''))
+                        showToast('批注已保存')
+                    }
+                })
+            } else if (r.tapIndex === 4 && cur) {
+                removeMark(slug.value, g)
+                showToast('已清除')
+            }
+        }
+    })
 }
 
 function goBack() {

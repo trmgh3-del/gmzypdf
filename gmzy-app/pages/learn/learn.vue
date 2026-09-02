@@ -1,5 +1,5 @@
 <template>
-    <view class="learn" :class="{ night, [themeCls]: night }">
+    <view class="learn" :class="{ night, elder: store.settings.elder, [themeCls]: night }">
         <!-- 学习总览 -->
         <view class="hero-op" @tap="goStats">详表 ›</view>
         <view class="hero">
@@ -101,7 +101,10 @@
         <view class="sec">
             <view class="sec-head">
                 <text class="sec-title">复习思考题</text>
-                <text class="sec-total serif-font">共 {{ totalQuiz }} 题</text>
+                <view>
+                    <text class="mock-entry" @tap="goMock">📝 综合模考</text>
+                    <text class="sec-total serif-font"> 共 {{ totalQuiz }} 题</text>
+                </view>
             </view>
             <view v-for="b in quizBooks" :key="b.slug + b.book" class="qbook" @tap="openQuiz(b)">
                 <text class="qbook-name serif-font">{{ b.book }}</text>
@@ -261,6 +264,10 @@ function openQuizErr(b) {
 function openQuiz(b) {
     uni.navigateTo({ url: '/pages/quiz/quiz?k=' + encodeURIComponent(quizKey(b)) + '&title=' + encodeURIComponent(b.book) })
 }
+
+function goMock() {
+    uni.navigateTo({ url: '/pages/quiz/quiz?mock=1' })
+}
 </script>
 
 <style lang="scss" scoped>
@@ -396,6 +403,15 @@ function openQuiz(b) {
     font-size: 30rpx;
     font-weight: 600;
     color: #37332b;
+}
+
+.mock-entry {
+    font-size: 23rpx;
+    color: #f3e9d2;
+    background: #8b3a3a;
+    border-radius: 18rpx;
+    padding: 6rpx 18rpx;
+    margin-right: 12rpx;
 }
 
 .sec-total {

@@ -1,5 +1,5 @@
 <template>
-    <view class="search" :class="{ night, [themeCls]: night }">
+    <view class="search" :class="{ night, elder: store.settings.elder, [themeCls]: night }">
         <!-- 搜索栏 -->
         <view class="bar">
             <view class="bar-input">

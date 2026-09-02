@@ -14,7 +14,11 @@ const defaults = {
         night: false,          // 全局夜间模式
         nightTheme: 'warm',  // 夜间配色：warm 暖金 / slate 青灰 / amber 暖棕
         remind: 20,        // 学习提醒小时：-1=关 7=早7点 20=晚8点 21=晚9点
+        elder: false,      // 长辈模式：放大字号、加宽行距、精简界面
+        cardReverse: {},   // 反向卡开关: { deckId: true }
     },
+    // 阅读划线批注: { slug: { '123': { c:'y|r|g', note:'', ex:'摘录', ts } } }（key=块全局序号 g）
+    marks: {},
     // 每本书的阅读进度: { slug: { chIdx, scrollTop, gIdx, percent, ts } }
     progress: {},
     // 最近阅读历史: [{ slug, title, chapter, gIdx, chIdx, scrollTop, percent, ts, cover }]
@@ -38,7 +42,9 @@ const defaults = {
         // 每日活跃: { '2026-09-01': { cards: 10, quiz: 5, done: 1 } }
         activity: {},
         // 辨证记录: [{ ts, symptoms: [label...], top: { name, pct }, count }]
-        diagHistory: []
+        diagHistory: [],
+        // 模考成绩: [{ t, n 题数, k 答出数, s 用时秒 }]（新→旧，上限 30 条）
+        mockHistory: []
     }
 }
 
@@ -52,6 +58,7 @@ function loadInitial() {
             if (saved.progress) init.progress = saved.progress
             if (Array.isArray(saved.history)) init.history = saved.history
             if (Array.isArray(saved.bookmarks)) init.bookmarks = saved.bookmarks
+            if (saved.marks && typeof saved.marks === 'object') init.marks = saved.marks
             if (saved.learn) {
                 const L = saved.learn
                 init.learn.keyV = L.keyV || 1
@@ -62,6 +69,7 @@ function loadInitial() {
                 if (L.qErr) init.learn.qErr = L.qErr
                 if (L.activity) init.learn.activity = L.activity
                 if (Array.isArray(L.diagHistory)) init.learn.diagHistory = L.diagHistory
+                if (Array.isArray(L.mockHistory)) init.learn.mockHistory = L.mockHistory
             }
         }
     } catch (e) {
@@ -117,6 +125,23 @@ export function addBookmark(entry) {
 
 export function removeBookmark(idx) {
     store.bookmarks.splice(idx, 1)
+}
+
+// ---- 阅读划线批注 ----
+export function setMark(slug, g, c, note, ex) {
+    if (!store.marks[slug]) store.marks[slug] = {}
+    store.marks[slug][String(g)] = { c, note: note || '', ex: ex || '', ts: Date.now() }
+}
+
+export function removeMark(slug, g) {
+    const m = store.marks[slug]
+    if (m && m[String(g)] !== undefined) delete m[String(g)]
+}
+
+// ---- 模考成绩 ----
+export function pushMockResult(entry) {
+    store.learn.mockHistory.unshift(Object.assign({ t: Date.now() }, entry))
+    if (store.learn.mockHistory.length > 30) store.learn.mockHistory.length = 30
 }
 
 export function clearBookmarks() {
@@ -427,6 +452,7 @@ export function backupBundle() {
         progress: store.progress,
         history: store.history,
         bookmarks: store.bookmarks,
+        marks: store.marks,
         learn: store.learn
     })
 }
@@ -444,6 +470,7 @@ export function restoreBundle(jsonText) {
     if (obj.progress) store.progress = obj.progress
     if (Array.isArray(obj.history)) store.history = obj.history
     if (Array.isArray(obj.bookmarks)) store.bookmarks = obj.bookmarks
+    if (obj.marks && typeof obj.marks === 'object') store.marks = obj.marks
     if (obj.learn) {
         store.learn = Object.assign(store.learn, obj.learn)
     }

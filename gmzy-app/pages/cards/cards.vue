@@ -1,5 +1,5 @@
 <template>
-    <view class="cards" :class="{ night, [themeCls]: night }" @touchstart="ts" @touchend="te">
+    <view class="cards" :class="{ night, elder: store.settings.elder, [themeCls]: night }" @touchstart="ts" @touchend="te">
         <view v-if="!ready" class="loading">卡片加载中…</view>
         <template v-else-if="!queue.length">
             <view class="done-all">
@@ -27,6 +27,7 @@
                         @tap="resetFilter(f.key)"
                     >{{ f.name }}</text>
                 </view>
+                <text class="shuffle" :class="{ on: reversed }" v-if="canReverse" @tap="toggleReverse">{{ reversed ? '正向' : '反向' }}</text>
                 <text class="shuffle" :class="{ on: shuffled }" @tap="toggleShuffle">乱序</text>
             </view>
 
@@ -34,15 +35,29 @@
                 <view class="card" :class="{ flipped, ['lv' + mastery]: !flipped }">
                     <view class="face front">
                         <text class="card-sub">{{ cur.sub }}</text>
-                        <text class="card-front serif-font">{{ cur.front }}</text>
-                        <text v-if="dueInfo" class="card-due">{{ dueInfo }}</text>
-                        <text class="card-hint">点击卡片查看释义 · 左右滑动切换</text>
+                        <template v-if="!reversed">
+                            <text class="card-front serif-font">{{ cur.front }}</text>
+                            <text v-if="dueInfo" class="card-due">{{ dueInfo }}</text>
+                            <text class="card-hint">点击卡片查看释义 · 左右滑动切换</text>
+                        </template>
+                        <template v-else>
+                            <scroll-view scroll-y class="front-scroll">
+                                <text class="front-long">{{ cur.back }}</text>
+                            </scroll-view>
+                            <text class="card-hint">心里默念名称，点卡核对 · 左右滑动切换</text>
+                        </template>
                     </view>
                     <view class="face back">
-                        <text class="back-title serif-font">{{ cur.front }}</text>
-                        <scroll-view scroll-y class="back-scroll">
-                            <text class="back-body">{{ cur.back }}</text>
-                        </scroll-view>
+                        <template v-if="!reversed">
+                            <text class="back-title serif-font">{{ cur.front }}</text>
+                            <scroll-view scroll-y class="back-scroll">
+                                <text class="back-body">{{ cur.back }}</text>
+                            </scroll-view>
+                        </template>
+                        <template v-else>
+                            <text class="card-front serif-font">{{ cur.front }}</text>
+                            <text class="card-sub rev-sub">{{ cur.sub }}</text>
+                        </template>
                         <view v-if="hasAnchor" class="src-link" @tap.stop="goSource">📖 查看教材原文 ›</view>
                     </view>
                 </view>
@@ -118,12 +133,26 @@ const ttsPlaying = ref(false)
 function readAloud() {
     const c = cur.value
     if (!c.front) return
+    const frontText = reversed.value ? String(c.back || '') : c.front
     const text = flipped.value
-        ? `${c.front}。${String(c.back || '').replace(/[【】]/g, '，')}`
-        : c.front
+        ? reversed.value
+            ? `${frontText}。${c.front}`
+            : `${c.front}。${String(c.back || '').replace(/[【】]/g, '，')}`
+        : frontText
     if (!speak(text)) {
         uni.showToast({ title: '当前环境不支持朗读', icon: 'none' })
     }
+}
+
+// ---- 反向卡 ----
+const REVERSE_DECKS = ['herb', 'fangji', 'point', 'bingz']
+const canReverse = computed(() => REVERSE_DECKS.includes(deckId.value))
+const reversed = computed(() => !!(store.settings.cardReverse || {})[deckId.value])
+
+function toggleReverse() {
+    if (!store.settings.cardReverse) store.settings.cardReverse = {}
+    store.settings.cardReverse[deckId.value] = !reversed.value
+    flipped.value = false
 }
 
 const isKoujue = computed(() => deckId.value === 'koujue')
@@ -695,6 +724,24 @@ function te(e) {
     line-height: 1.9;
     color: #4a453b;
     white-space: pre-line;
+}
+
+/* 反向卡：正面放长文 */
+.front-scroll {
+    flex: 1;
+    height: 380rpx;
+    margin-top: 12rpx;
+}
+
+.front-long {
+    font-size: 30rpx;
+    line-height: 1.95;
+    color: #3d3830;
+    white-space: pre-line;
+}
+
+.rev-sub {
+    margin-top: 14rpx;
 }
 
 .src-link {

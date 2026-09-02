@@ -1,5 +1,5 @@
 <template>
-    <view class="diag" :class="{ night, [themeCls]: night }">
+    <view class="diag" :class="{ night, elder: store.settings.elder, [themeCls]: night }">
         <!-- 免责声明常驻 -->
         <view class="notice">
             <text class="notice-icon">⚠</text>

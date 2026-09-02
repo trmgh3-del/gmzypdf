@@ -1,5 +1,5 @@
 <template>
-    <view class="mine" :class="{ night, [themeCls]: night }">
+    <view class="mine" :class="{ night, elder: store.settings.elder, [themeCls]: night }">
         <!-- 统计卡 -->
         <view class="stats">
             <view class="stat">
@@ -68,6 +68,32 @@
             </view>
         </view>
 
+        <!-- 划线批注 -->
+        <view class="sec" v-if="markList.length">
+            <view class="sec-head">
+                <text class="sec-title">划线批注</text>
+                <text class="sec-op" @tap="exportMarks">导出 ›</text>
+            </view>
+            <view
+                v-for="m in markList"
+                :key="m.slug + '-' + m.g"
+                class="bm-item"
+                @tap="openMark(m)"
+                @longpress="removeOneMark(m)"
+            >
+                <view class="bm-mark mk-dot serif-font" :class="'mk-dot-' + m.c">{{ m.note ? '注' : '线' }}</view>
+                <view class="bm-info">
+                    <view class="bm-top">
+                        <text class="bm-book">《{{ m.title }}》</text>
+                        <text class="bm-time">{{ formatTime(m.ts) }}</text>
+                    </view>
+                    <text class="bm-text">{{ m.ex }}</text>
+                    <text v-if="m.note" class="mk-note-line">✏️ {{ m.note }}</text>
+                </view>
+            </view>
+            <text class="bm-tip">长按单条可删除 · 点击回到原文</text>
+        </view>
+
         <!-- 已完成的书籍徽章 -->
         <view class="sec" v-if="finishedBooks.length">
             <view class="sec-head">
@@ -103,6 +129,13 @@
                     <text class="sw" v-for="t in NIGHT_THEMES" :key="t.id" :class="{ on: t.id === store.settings.nightTheme }"
                         :style="{ background: t.c1, borderColor: t.c2 }" />
                 </view>
+            </view>
+            <view class="set-row" @tap="toggleElder">
+                <view class="set-info">
+                    <text class="set-name">长辈模式</text>
+                    <text class="set-desc">放大字号、加宽行距，阅读器和主要界面同步变大</text>
+                </view>
+                <switch :checked="store.settings.elder" color="#8b3a3a" @change="toggleElder" @tap.stop />
             </view>
             <view class="set-row" @tap="pickRemind">
                 <view class="set-info">
@@ -150,7 +183,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { store, removeHistory, clearHistory, removeBookmark, clearBookmarks, setNight, backupBundle, restoreBundle, newPerDayLimit } from '../../common/store.js'
+import { store, removeHistory, clearHistory, removeBookmark, clearBookmarks, setNight, backupBundle, restoreBundle, newPerDayLimit, removeMark } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
 import { setRemindHour } from '../../common/remind.js'
 import { formatTime } from '../../common/util.js'
@@ -196,6 +229,14 @@ function pickNightTheme() {
             store.settings.nightTheme = NIGHT_THEMES[r.tapIndex].id
             applyNavTheme()
         }
+    })
+}
+
+function toggleElder() {
+    store.settings.elder = !store.settings.elder
+    uni.showToast({
+        title: store.settings.elder ? '长辈模式已开启（阅读字号已自动放大）' : '长辈模式已关闭',
+        icon: 'none'
     })
 }
 
@@ -312,6 +353,37 @@ onShow(async () => {
         catalog.value = await loadCatalog()
     }
 })
+
+// ---- 划线批注聚合 ----
+const markList = computed(() => {
+    const out = []
+    for (const slug of Object.keys(store.marks || {})) {
+        const mm = store.marks[slug]
+        const meta = catalog.value.find((b) => b.slug === slug) || {}
+        for (const g of Object.keys(mm)) {
+            const it = mm[g] || {}
+            out.push({ slug, g, title: meta.title || slug, c: it.c || 'y', note: it.note || '', ex: it.ex || '', ts: it.ts || 0 })
+        }
+    }
+    return out.sort((a, b) => b.ts - a.ts).slice(0, 50)
+})
+
+function openMark(m) {
+    uni.navigateTo({ url: `/pages/reader/reader?slug=${m.slug}&g=${m.g}` })
+}
+
+function removeOneMark(m) {
+    removeMark(m.slug, m.g)
+    uni.showToast({ title: '已删除', icon: 'none' })
+}
+
+const BR = String.fromCharCode(10)
+function exportMarks() {
+    if (!markList.value.length) return
+    const lines = markList.value.map((m) => `【${m.title}】${m.ex}${m.note ? BR + '批注：' + m.note : ''}`)
+    uni.setClipboardData({ data: lines.join(BR + BR) })
+    uni.showToast({ title: '笔记已复制', icon: 'none' })
+}
 
 const finishedBooks = computed(() => {
     tick.value
@@ -570,6 +642,29 @@ function clearBm() {
     margin-left: 16rpx;
     font-size: 20rpx;
     color: #a39478;
+}
+
+.mk-dot.mk-dot-y { background: #e0b34a; }
+.mk-dot.mk-dot-r { background: #c45454; }
+.mk-dot.mk-dot-g { background: #6e9b64; }
+
+.mk-note-line {
+    display: block;
+    margin-top: 8rpx;
+    padding: 8rpx 16rpx;
+    font-size: 23rpx;
+    color: #7a4646;
+    background: rgba(139, 58, 58, 0.07);
+    border-left: 5rpx solid #b5735a;
+    border-radius: 0 8rpx 8rpx 0;
+}
+
+.bm-tip {
+    display: block;
+    margin-top: 14rpx;
+    text-align: center;
+    font-size: 21rpx;
+    color: #a39880;
 }
 
 .bm-text {

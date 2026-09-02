@@ -172,4 +172,28 @@ view, text, scroll-view, image, input, picker, slider, button {
 /* 空态按钮描边 */
 .night .btn.ghost { border-color: var(--nline); }
 
+/* ============ 长辈模式：页面根 .elder 时全局放大 ============ */
+/* 页内样式为 scoped，此处用 !important 提权统一放大 */
+.elder .sec-title, .elder .set-name { font-size: 34rpx !important; }
+.elder .set-desc, .elder .deck-desc, .elder .deck-meta, .elder .bm-text,
+.elder .his-meta, .elder .qtag, .elder .mk-sub, .elder .week-legend, .elder .lg, .elder .dot-text { font-size: 28rpx !important; }
+.elder .hero-num { font-size: 58rpx !important; }
+.elder .hero-label { font-size: 26rpx !important; }
+.elder .deck-name, .elder .qbook-name, .elder .bm-book, .elder .his-title { font-size: 35rpx !important; }
+.elder .counter { font-size: 34rpx !important; }
+.elder .seg-item { font-size: 28rpx !important; padding: 12rpx 28rpx !important; }
+.elder .qtext { font-size: 35rpx !important; line-height: 1.9 !important; }
+.elder .rate-name { font-size: 34rpx !important; }
+.elder .rate-sub { font-size: 25rpx !important; }
+.elder .card-front { font-size: 84rpx !important; }
+.elder .back-body, .elder .front-long { font-size: 34rpx !important; }
+.elder .back-title { font-size: 40rpx !important; }
+.elder .card-sub { font-size: 30rpx !important; }
+.elder .due-badge, .elder .deck-count, .elder .qbook-meta { font-size: 26rpx !important; }
+.elder .nav-btn, .elder .foot-act, .elder .sec-op { font-size: 30rpx !important; }
+.elder .card-hint { font-size: 26rpx !important; }
+.elder .mk-clock, .elder .mock-clock { font-size: 36rpx !important; }
+.elder .stat-num, .elder .acc-num, .elder .hero-cell .hero-num { font-size: 52rpx !important; }
+.elder .empty { font-size: 30rpx !important; }
+
 </style>

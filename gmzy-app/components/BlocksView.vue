@@ -6,8 +6,9 @@
             :id="'blk-' + b.g"
             :data-g="b.g"
             class="blk"
-            :class="[blockClass(b), { 'blk-dict': dictMode && (b.t === 'p' || b.t === 'h') }]"
+            :class="[blockClass(b), markCls(b), { 'blk-dict': dictMode && (b.t === 'p' || b.t === 'h') }]"
             @tap="onBlkTap(b, $event)"
+            @longpress="onBlkLong(b, $event)"
         >
             <!-- 标题 -->
             <view v-if="b.t === 'h'" class="hd-wrap">
@@ -20,6 +21,7 @@
                     <text v-if="s.ref" class="pt pt-ref serif-font" @tap.stop="onRefTap(s.ref)">{{ s.x }}</text>
                     <text v-else class="pt" :class="{ 'pt-bold': s.b }" :user-select="true">{{ s.x }}</text>
                 </template>
+                <view v-if="marks[b.g] && marks[b.g].note" class="mk-note">✏️ {{ marks[b.g].note }}</view>
             </view>
             <!-- 图片 -->
             <view v-else-if="b.t === 'img'" class="fig" @tap.stop="$emit('img', b)">
@@ -51,10 +53,24 @@
 const props = defineProps({
     blocks: { type: Array, default: () => [] }, // 每块带 g 全局序号
     slug: { type: String, default: '' },
-    dictMode: { type: Boolean, default: false } // 查词模式：点段落触发 blk 事件
+    dictMode: { type: Boolean, default: false }, // 查词模式：点段落触发 blk 事件
+    marks: { type: Object, default: () => ({}) }  // { g: { c:'y|r|g', note } } 划线批注
 })
 
-const emit = defineEmits(['img', 'blk', 'ref'])
+const emit = defineEmits(['img', 'blk', 'ref', 'mark'])
+
+function markCls(b) {
+    const m = props.marks && props.marks[b.g]
+    return m ? 'mk mk-' + m.c : ''
+}
+
+function onBlkLong(b, e) {
+    if (props.dictMode) return
+    if (b.t !== 'p') return
+    e && e.stopPropagation && e.stopPropagation()
+    const text = (b.segs || []).map((s) => s.x || '').join('')
+    emit('mark', { g: b.g, text })
+}
 
 function onBlkTap(b, e) {
     if (!props.dictMode) return
@@ -223,5 +239,29 @@ function tableMinWidth(b) {
 .blk-dict .para {
     background: rgba(139, 58, 58, 0.045);
     border-radius: 6rpx;
+}
+
+/* 划线批注 */
+.blk.mk {
+    border-radius: 8rpx;
+    margin-left: -10rpx;
+    margin-right: -10rpx;
+    padding: 0 10rpx;
+}
+
+.blk.mk-y { background: rgba(231, 190, 90, 0.32); }
+.blk.mk-r { background: rgba(196, 84, 84, 0.2); }
+.blk.mk-g { background: rgba(110, 155, 100, 0.24); }
+
+.mk-note {
+    display: block;
+    margin-top: 10rpx;
+    padding: 10rpx 18rpx;
+    font-size: 0.82em;
+    line-height: 1.5;
+    color: #7a4646;
+    background: rgba(139, 58, 58, 0.07);
+    border-left: 5rpx solid #b5735a;
+    border-radius: 0 10rpx 10rpx 0;
 }
 </style>

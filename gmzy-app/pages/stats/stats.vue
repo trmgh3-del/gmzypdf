@@ -1,5 +1,5 @@
 <template>
-    <view class="stats-page" :class="{ night, [themeCls]: night }">
+    <view class="stats-page" :class="{ night, elder: store.settings.elder, [themeCls]: night }">
         <!-- 总览 -->
         <view class="hero">
             <view class="hero-block serif-font">{{ totals.studyDays }}</view>
@@ -74,6 +74,22 @@
             </view>
         </view>
 
+        <!-- 模考战绩 -->
+        <view class="sec" v-if="mocks.length">
+            <view class="sec-head-row">
+                <text class="sec-title">模考战绩</text>
+                <text class="mk-sub">共 {{ mocks.length }} 场 · 场均 {{ mockAvg }}% · 最佳 {{ mockBest }}%</text>
+            </view>
+            <view class="mk-chart">
+                <view v-for="m in mocksChart" :key="m.t" class="mk-col">
+                    <text class="mk-col-v">{{ m.acc }}</text>
+                    <view class="mk-col-bar serif-font" :style="{ height: m.h + 'rpx' }" />
+                    <text class="mk-col-d">{{ m.d }}</text>
+                </view>
+            </view>
+            <text class="hm-legend">近 {{ mocksChart.length }} 场答出率（柱上所标为百分数）</text>
+        </view>
+
         <!-- 近 30 日学习热力 -->
         <view class="sec">
             <text class="sec-title">近 30 日学习热力</text>
@@ -132,6 +148,25 @@ onLoad(async () => {
 const accKnow = ref(0)
 const accWeak = ref(0)
 const errLeft = ref(0)
+// ---- 模考战绩 ----
+const mocks = computed(() => store.learn.mockHistory || [])
+const mockAvg = computed(() => {
+    if (!mocks.value.length) return 0
+    const s = mocks.value.reduce((a, m) => a + (m.n ? m.k / m.n : 0), 0)
+    return Math.round((s / mocks.value.length) * 100)
+})
+const mockBest = computed(() => Math.round(Math.max(0, ...mocks.value.map((m) => (m.n ? m.k / m.n : 0))) * 100))
+const mocksChart = computed(() =>
+    mocks.value
+        .slice(0, 10)
+        .reverse()
+        .map((m) => {
+            const acc = m.n ? Math.round((m.k / m.n) * 100) : 0
+            const dt = new Date(m.t)
+            return { t: m.t, acc, h: 12 + Math.round(acc * 1.1), d: `${dt.getMonth() + 1}/${dt.getDate()}` }
+        })
+)
+
 const accRate = computed(() => {
     const t = accKnow.value + accWeak.value
     return t ? Math.round((accKnow.value / t) * 100) : 0
@@ -208,6 +243,13 @@ function hmOpacity(n) {
 }
 
 .sec-title { font-size: 27rpx; color: #5c5646; font-weight: 600; }
+.sec-head-row { display: flex; flex-direction: row; align-items: baseline; justify-content: space-between; }
+.mk-sub { font-size: 21rpx; color: #a39880; }
+.mk-chart { flex-direction: row; display: flex; align-items: flex-end; justify-content: space-around; margin-top: 18rpx; }
+.mk-col { display: flex; flex-direction: column; align-items: center; width: 58rpx; }
+.mk-col-v { font-size: 19rpx; color: #8b3a3a; }
+.mk-col-bar { width: 26rpx; min-height: 12rpx; border-radius: 8rpx 8rpx 0 0; background: linear-gradient(180deg, #8b3a3a, #b5735a); margin: 6rpx 0; }
+.mk-col-d { font-size: 19rpx; color: #a39880; }
 
 .row {
     display: flex;

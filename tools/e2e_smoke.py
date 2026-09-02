@@ -103,6 +103,34 @@ for path in ('pages/index/index', 'pages/reader/reader', 'pages/learn/learn', 'p
         err(f'pages.json 缺路由 {path}')
 print(f'  版本 {ver} 且 mine CARD_NUM 一致')
 
+# 7) 学习增值功能接线
+print('\n[7] 模考/划线/反向卡/长辈模式')
+storejs = open(os.path.join(APP, 'common/store.js'), encoding='utf-8').read()
+for key in ('mockHistory', 'pushMockResult', 'setMark', 'removeMark', 'cardReverse', 'elder'):
+    if key not in storejs:
+        err(f'store.js 缺少 {key}')
+quiz = open(os.path.join(APP, 'pages/quiz/quiz.vue'), encoding='utf-8').read()
+for key in ('setupMock', 'submitMock', 'mock-1', 'pushMockResult'):
+    if key not in quiz and key != 'mock-1':
+        err(f'quiz.vue 缺少模考逻辑 {key}')
+if 'quiz?mock=1' not in open(os.path.join(APP, 'pages/learn/learn.vue'), encoding='utf-8').read():
+    err('learn.vue 缺少模考入口')
+reader = open(os.path.join(APP, 'pages/reader/reader.vue'), encoding='utf-8').read()
+if '@mark="onMark"' not in reader or 'setMark' not in reader:
+    err('reader.vue 未接入划线批注')
+bv = open(os.path.join(APP, 'components/BlocksView.vue'), encoding='utf-8').read()
+if 'longpress' not in bv or 'mk-note' not in bv:
+    err('BlocksView.vue 缺少长按划线')
+cards = open(os.path.join(APP, 'pages/cards/cards.vue'), encoding='utf-8').read()
+if 'REVERSE_DECKS' not in cards or 'toggleReverse' not in cards:
+    err('cards.vue 缺少反向卡')
+mine = open(os.path.join(APP, 'pages/mine/mine.vue'), encoding='utf-8').read()
+if 'toggleElder' not in mine or 'markList' not in mine:
+    err('mine.vue 缺少长辈模式/批注聚合')
+if not os.path.isfile(os.path.join(ROOT, 'tools/build_pwa.py')):
+    err('缺少 tools/build_pwa.py')
+print('  模考/划线/反向/长辈/PWA 接线齐全')
+
 print()
 if fail:
     print(f'FAILED: {len(fail)} 项')

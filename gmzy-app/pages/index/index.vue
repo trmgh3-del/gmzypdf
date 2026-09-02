@@ -1,5 +1,5 @@
 <template>
-    <view class="shelf" :class="{ night, [themeCls]: night }">
+    <view class="shelf" :class="{ night, elder: store.settings.elder, [themeCls]: night }">
         <!-- 顶部横幅 -->
         <view class="hero">
             <view class="hero-inner">
