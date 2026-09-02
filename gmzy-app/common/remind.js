@@ -1,7 +1,7 @@
 // remind.js — 本地学习提醒（纯离线）
 // App 端：plus.push 系统级本地定时通知（App 被杀死仍弹出）。
 // H5 端：打开应用时若今日未学且有到期卡，弹一次 toast。
-import { store, deckStats, quizMistakeCount } from './store.js'
+import { store, deckStats, quizMistakeCount, wenguList } from './store.js'
 
 export function todayLearnedCount() {
     const d = new Date()
@@ -27,9 +27,11 @@ function computeMessageText() {
     const due = decks.reduce((s, id) => s + deckStats(id, 0).due, 0)
     const errs = (store.learn.qErr ? Object.values(store.learn.qErr) : []).reduce(
         (s, errs) => s + Object.values(errs || {}).filter((e) => e.m >= 2).length, 0)
+    const wg = wenguList().filter((w) => w.dueIn === 0).length
     const bits = []
     if (due) bits.push(`${due} 张卡到期`)
     if (errs) bits.push(`${errs} 道错题重练`)
+    if (wg) bits.push(`温故 ${wg} 题到日`)
     if (!bits.length) return null
     return bits.join('，') + '，温故而知新'
 }

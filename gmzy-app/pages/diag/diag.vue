@@ -566,6 +566,7 @@
                 <text class="peek-src">{{ peekItem.src }}</text>
                 <view class="peek-btns">
                     <text class="peek-btn ghost" @tap="peekItem = null">继续看图谱</text>
+                    <text class="peek-btn amber" @tap="onShareCard">出片分享 ›</text>
                     <text class="peek-btn solid" @tap="peekSearch">检索教材原文 ›</text>
                 </view>
             </view>
@@ -573,6 +574,15 @@
 
         <!-- 段位晋升金榜 -->
         <YuanqiCeremony :info="promoInfo" @close="promoInfo = null" />
+
+        <!-- 出片兜底：大图供长按保存 -->
+        <view v-if="shareImg" class="share-mask" @tap="closeShareImg">
+            <view class="share-card" @tap.stop>
+                <image class="share-img" :src="shareImg" mode="widthFix" />
+                <text class="share-hint">长按图片保存/转发 · 点屏背景关闭</text>
+                <text class="peek-btn ghost share-close" @tap="closeShareImg">关闭</text>
+            </view>
+        </view>
     </view>
 </template>
 
@@ -582,6 +592,7 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { loadDiagRules, loadDeck, loadDiagAtlas, loadDiagQuiz, loadDiagGuide } from '../../common/learn.js'
 import { diagnose, symptomIndex, findVs, RED_FLAGS, DANGER_SYNS } from '../../common/diagnosis.js'
 import { store, pending, pushDiagRecord, clearDiagHistory, pushDiagQuiz, quizMistakes, setQuizAnswer, bumpAtlasStat, clearAtlasStats, bumpGqYuanqi, endGqStreak, gqRank, awardExamEnergy, redeemMockMissTerm, wenguList } from '../../common/store.js'
+import { makeSharePng, savePng } from '../../common/sharecard.js'
 import { applyNavTheme } from '../../common/theme.js'
 import TongueSvg from '../../components/TongueSvg.vue'
 import PulseSvg from '../../components/PulseSvg.vue'
@@ -774,6 +785,28 @@ function peekSearch() {
     const it = peekItem.value
     peekItem.value = null
     atlasGo(it)
+}
+
+// 出片分享：图谱+释义合成 PNG 卡片
+const shareImg = ref(null)
+async function onShareCard() {
+    const it = peekItem.value
+    if (!it) return
+    const url = await makeSharePng(it)
+    if (!url) {
+        uni.showToast({ icon: 'none', title: '出片失败，请重试' })
+        return
+    }
+    const ok = await savePng(url, '光明文库_' + it.term.replace(/[^\w一-龥]/g, '') + '.png')
+    if (ok) {
+        uni.showToast({ icon: 'none', title: '已存入相册/下载成功' })
+        shareImg.value = null
+    } else {
+        shareImg.value = url // 降级：展示大图供长按保存
+    }
+}
+function closeShareImg() {
+    shareImg.value = null
 }
 
 // ---- 图考坐堂 ----
@@ -2419,6 +2452,50 @@ function fmt(ts) {
 .peek-btn.solid {
     background: #8b3a3a;
     color: #fffdf7;
+}
+
+.peek-btn.amber {
+    background: #b5935a;
+    color: #fffdf7;
+}
+
+/* 出片兜底展示 */
+.share-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(24, 16, 10, 0.6);
+    z-index: 998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.share-card {
+    width: 86%;
+    max-height: 90vh;
+    background: #fdf9ef;
+    border-radius: 22rpx;
+    padding: 26rpx;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    overflow-y: auto;
+}
+
+.share-img {
+    width: 100%;
+    border-radius: 14rpx;
+    border: 1px solid rgba(139, 58, 58, 0.15);
+}
+
+.share-hint {
+    font-size: 22rpx;
+    color: #8d8371;
+    margin: 16rpx 0;
+}
+
+.share-close {
+    width: 60%;
 }
 
 /* ---- 症状搜索 ---- */

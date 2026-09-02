@@ -370,6 +370,28 @@ for key in ('gqRankInfo', 'yuanqiToday', 'goHub', 'kh-fill', 'kh-name', 'pending
         err(f'mine.vue 缺段位卡要素：{key}')
 print('  温故阶梯 1/3/7 已接线 · 回流冲销已入图考 · mine 段位卡挂载')
 
+# 14) 出片分享 · 温故入提醒 · 本周奏报
+print('\n[14] 出片·提醒·周报')
+sharejs = os.path.join(APP, 'common/sharecard.js')
+if not os.path.isfile(sharejs):
+    err('缺少 sharecard.js（出片工具）')
+else:
+    sjs = open(sharejs, encoding='utf-8').read()
+    for key in ('makeSharePng', 'savePng', 'buildCardSvg', 'peekFigXml', 'svgToPngDataUrl', 'saveImageToPhotosAlbum'):
+        if key not in sjs:
+            err(f'sharecard.js 缺少 {key}')
+for key in ('onShareCard', 'shareImg', 'makeSharePng', 'savePng', '出片分享'):
+    if key not in diagvue:
+        err(f'diag.vue 缺出片接线：{key}')
+remindjs = open(os.path.join(APP, 'common/remind.js'), encoding='utf-8').read()
+if 'wenguList' not in remindjs or '温故' not in remindjs:
+    err('remind.js 未并入温故待温')
+statsvue = open(os.path.join(APP, 'pages/stats/stats.vue'), encoding='utf-8').read()
+for key in ('wkHeat', 'wkNote', 'copyWeekly', 'weeklyText', '本周奏报', '誊抄', 'wkRank', 'wenguDueNow'):
+    if key not in statsvue:
+        err(f'stats.vue 缺周报要素：{key}')
+print('  出片两路（App 相册 / H5 下载/长按兜底） · 温故并入每日提醒文案 · 本周奏报（7 日热+拟签）已接线')
+
 print()
 if fail:
     print(f'FAILED: {len(fail)} 项')

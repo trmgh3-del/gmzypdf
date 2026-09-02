@@ -91,6 +91,27 @@
         </view>
 
         <!-- 近 30 日学习热力 -->
+        <!-- 本周奏报（7 日热图 + 拟签） -->
+        <view class="sec weekly">
+            <view class="sec-head">
+                <text class="sec-title">📜 本周奏报</text>
+                <text class="sec-op" @tap="copyWeekly">誊抄 ›</text>
+            </view>
+            <text class="wk-range serif-font">{{ wkRange }}</text>
+            <view class="wk-heat">
+                <view v-for="d in wkHeat" :key="d.day" class="wk-cell" :class="{ zero: !d.n }" :style="{ opacity: wkOpacity(d.n) }">
+                    <text class="wk-dd">{{ d.wd }}</text>
+                    <text class="wk-n">{{ d.n || '·' }}</text>
+                </view>
+            </view>
+            <view class="wk-totals">
+                <text class="wk-t">记卡 {{ wk.cards }} · 研题 {{ wk.quiz }} · 辨证 {{ wk.done }} · 元气 +{{ wk.yuanqi }}</text>
+            </view>
+            <view class="wk-note">
+                <text class="wk-note-body serif-font">{{ wkNote }}</text>
+            </view>
+        </view>
+
         <view class="sec">
             <text class="sec-title">近 30 日学习热力</text>
             <view class="heatmap">
@@ -106,7 +127,7 @@
 import { ref, computed, reactive } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { loadDecks, loadQuizIndex } from '../../common/learn.js'
-import { store, deckStats, quizStatsOf } from '../../common/store.js'
+import { store, deckStats, quizStatsOf, gqRank, wenguList } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
 
 const decks = ref([])
@@ -212,6 +233,83 @@ function hmOpacity(n) {
     if (!n) return 0.18
     return Math.min(1, 0.28 + n / 26)
 }
+
+// ---- 本周奏报（近 7 日） ----
+const WD = ['日', '一', '二', '三', '四', '五', '六']
+function dayKey(d) {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+const wkHeat = computed(() => {
+    const out = []
+    const now = Date.now()
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date(now - i * 86400000)
+        const key = dayKey(d)
+        const a = store.learn.activity[key] || {}
+        const n = (a.cards || 0) + (a.quiz || 0) + (a.done || 0) + (a.yuanqi || 0)
+        out.push({ day: key, wd: i === 0 ? '今' : WD[d.getDay()], n })
+    }
+    return out
+})
+const wk = computed(() => {
+    const s = { cards: 0, quiz: 0, done: 0, yuanqi: 0, days: 0 }
+    const now = Date.now()
+    for (let i = 6; i >= 0; i--) {
+        const a = store.learn.activity[dayKey(new Date(now - i * 86400000))] || {}
+        s.cards += a.cards || 0
+        s.quiz += a.quiz || 0
+        s.done += a.done || 0
+        s.yuanqi += a.yuanqi || 0
+        if ((a.cards || 0) + (a.quiz || 0) + (a.done || 0) + (a.yuanqi || 0) > 0) s.days++
+    }
+    return s
+})
+const wkRange = computed(() => {
+    const a = wkHeat.value
+    return `${a[0].day} — ${a[a.length - 1].day} · 共 ${wk.value.days} 日有状`
+})
+function wkOpacity(n) {
+    if (!n) return 0.2
+    return Math.min(1, 0.35 + n / 22)
+}
+
+const wkRank = computed(() => gqRank((store.learn.gqYuanqi || {}).energy || 0))
+const wenguDueNow = computed(() => wenguList().filter((w) => w.dueIn === 0).length)
+
+// 拟签：按实绩定制签语
+const wkNote = computed(() => {
+    const w = wk.value
+    if (!w.cards && !w.quiz && !w.yuanqi && !w.done) {
+        return '这一旬未曾起笔，书页积尘。不必正襟危坐——三五分钟亦行：图考开一局，或卡库校十张。'
+    }
+    const parts = []
+    parts.push(`一旬七日，筋骨有状 ${w.days} 日，积元气 ${w.yuanqi} · 记卡 ${w.cards} 张 · 研题 ${w.quiz} 道`)
+    const dom = [
+        ['cards', w.cards, '温书勤谨，卡片为本'],
+        ['quiz', w.quiz, '开卷攻题，笔耕不辍'],
+        ['yuanqi', w.yuanqi, '勤考上进，元气见长']
+    ].sort((a, b) => b[1] - a[1])[0]
+    if (dom[1] > 0) parts.push(dom[2])
+    parts.push(`今阶「${wkRank.value.name}」${wkRank.value.next ? `，下一阶尚差元气 ${wkRank.value.need}` : '，已至顶峰'}`)
+    parts.push(wenguDueNow.value ? `温故席尚欠 ${wenguDueNow.value} 题到日，宜先还账再扬帆。` : '无待温之账，可放胆再闯。')
+    return parts.join('；') + '。'
+})
+
+function weeklyText() {
+    return [
+        `📜 光明文库 · 本周奏报（${wkRange.value}）`,
+        `段位：${wkRank.value.name}（元气 ${(store.learn.gqYuanqi || {}).energy || 0}）`,
+        `周绩：记卡 ${wk.value.cards} · 研题 ${wk.value.quiz} · 辨证 ${wk.value.done} · 元气 +${wk.value.yuanqi}`,
+        `拟签：${wkNote.value}`
+    ].join('\n')
+}
+
+function copyWeekly() {
+    uni.setClipboardData({
+        data: weeklyText(),
+        success: () => uni.showToast({ title: '奏报已誊抄', icon: 'none' })
+    })
+}
 </script>
 
 <style lang="scss" scoped>
@@ -296,6 +394,79 @@ function hmOpacity(n) {
 .acc-num { font-size: 36rpx; color: #8b3a3a; }
 .acc-num.mid { color: #c8922f; }
 .acc-label { font-size: 22rpx; color: #8a8070; }
+
+/* 本周奏报 */
+.weekly {
+    background: linear-gradient(135deg, #fffdf5, #fbf2dd);
+    border: 1px solid rgba(181, 147, 90, 0.5);
+}
+
+.wk-range {
+    display: block;
+    text-align: center;
+    font-size: 22rpx;
+    color: #a08c68;
+    margin-bottom: 14rpx;
+    letter-spacing: 2rpx;
+}
+
+.wk-heat {
+    display: flex;
+    gap: 10rpx;
+    margin-bottom: 12rpx;
+}
+
+.wk-cell {
+    flex: 1;
+    height: 88rpx;
+    background: #8b3a3a;
+    border-radius: 12rpx;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.wk-cell.zero {
+    background: #d8ccb0;
+}
+
+.wk-dd {
+    font-size: 20rpx;
+    color: #f3e9d2;
+}
+
+.wk-n {
+    font-size: 26rpx;
+    color: #fffdf7;
+    font-weight: 700;
+}
+
+.wk-cell.zero .wk-dd,
+.wk-cell.zero .wk-n {
+    color: #a08c68;
+}
+
+.wk-totals {
+    margin: 4rpx 0 14rpx;
+}
+
+.wk-t {
+    font-size: 22rpx;
+    color: #6b5d4f;
+}
+
+.wk-note {
+    border-top: 1px dashed rgba(181, 147, 90, 0.5);
+    padding-top: 14rpx;
+}
+
+.wk-note-body {
+    display: block;
+    font-size: 25rpx;
+    color: #5c2018;
+    line-height: 1.9;
+}
 
 .heatmap {
     display: grid;
