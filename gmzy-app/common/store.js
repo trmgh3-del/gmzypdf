@@ -49,8 +49,10 @@ const defaults = {
         diagQuiz: { done: 0, ok: 0 },
         // 诊法图谱账本: { 术语: { see 查原文, gqOk 图考对, gqNo 图考错 } }
         atlasStats: {},
-        // 图考元气系统: { energy 元气值, streak 当前连对, best 历史最佳连对 }
-        gqYuanqi: { energy: 0, streak: 0, best: 0 }
+        // 图考元气系统（三科共享池）: { energy 元气值, streak 图考连对, best 最佳连对, rankIdx 已至段位 }
+        gqYuanqi: { energy: 0, streak: 0, best: 0, rankIdx: 0 },
+        // 模考错题回流: { 图谱术语: 命中次数 }（模考错题题干扫到该术语，图考加权重）
+        mockMissTerms: {}
     }
 }
 
@@ -78,7 +80,8 @@ function loadInitial() {
                 if (Array.isArray(L.mockHistory)) init.learn.mockHistory = L.mockHistory
                 if (L.diagQuiz) init.learn.diagQuiz = Object.assign({ done: 0, ok: 0 }, L.diagQuiz)
                 if (L.atlasStats && typeof L.atlasStats === 'object') init.learn.atlasStats = L.atlasStats
-                if (L.gqYuanqi) init.learn.gqYuanqi = Object.assign({ energy: 0, streak: 0, best: 0 }, L.gqYuanqi)
+                if (L.gqYuanqi) init.learn.gqYuanqi = Object.assign({ energy: 0, streak: 0, best: 0, rankIdx: 0 }, L.gqYuanqi)
+                if (L.mockMissTerms && typeof L.mockMissTerms === 'object') init.learn.mockMissTerms = L.mockMissTerms
             }
         }
     } catch (e) {
@@ -376,6 +379,7 @@ export function bumpAtlasStat(term, field) {
 
 export function clearAtlasStats() {
     store.learn.atlasStats = {}
+    store.learn.mockMissTerms = {}
 }
 
 // ---- 图考元气/段位 ----
@@ -404,21 +408,48 @@ export function gqRank(energy) {
     return { idx, name: cur[1], energy: e, next: nxt ? nxt[0] : null, nextName: nxt ? nxt[1] : null, need, pct }
 }
 
-// 图考答对：元气+1；每 5 连对再赏 +2；连对中断不清元气
+// 能量变更后的段位晋升检测（三科通用）；晋升则返回金榜信息
+function afterEnergyChange(prevIdx) {
+    const y = store.learn.gqYuanqi
+    const idx = gqRank(y.energy).idx
+    y.rankIdx = Math.max(y.rankIdx || 0, idx)
+    if (idx > prevIdx) {
+        return { from: GQ_RANKS[prevIdx][1], to: GQ_RANKS[idx][1], idx, energy: y.energy }
+    }
+    return null
+}
+
+// 跨科元气灌注：医案每对 +1；模考交卷按答出率 +2/+4/+6
+export function awardExamEnergy(n) {
+    const y = store.learn.gqYuanqi || (store.learn.gqYuanqi = { energy: 0, streak: 0, best: 0, rankIdx: 0 })
+    const prev = gqRank(y.energy).idx
+    y.energy += Math.max(0, n | 0)
+    return afterEnergyChange(prev)
+}
+
+// 图考答对：元气+1；每 5 连对再赏 +2；连对中断不清元气；检测段位晋升
 export function bumpGqYuanqi() {
-    const y = store.learn.gqYuanqi || (store.learn.gqYuanqi = { energy: 0, streak: 0, best: 0 })
+    const y = store.learn.gqYuanqi || (store.learn.gqYuanqi = { energy: 0, streak: 0, best: 0, rankIdx: 0 })
+    const prev = gqRank(y.energy).idx
     y.streak++
     if (y.streak > y.best) y.best = y.streak
     y.energy += 1
     const bonus = y.streak % 5 === 0 ? 2 : 0
     if (bonus) y.energy += bonus
-    return { streak: y.streak, bonus }
+    return { streak: y.streak, bonus, promo: afterEnergyChange(prev) }
 }
 
 // 图考答错：连对清零（元气不伤）
 export function endGqStreak() {
-    const y = store.learn.gqYuanqi || (store.learn.gqYuanqi = { energy: 0, streak: 0, best: 0 })
+    const y = store.learn.gqYuanqi || (store.learn.gqYuanqi = { energy: 0, streak: 0, best: 0, rankIdx: 0 })
     y.streak = 0
+}
+
+// ---- 模考错题回流图谱权重 ----
+export function bumpMockMissTerm(term) {
+    const s = store.learn
+    if (!s.mockMissTerms) s.mockMissTerms = {}
+    s.mockMissTerms[term] = (s.mockMissTerms[term] || 0) + 1
 }
 
 // ---- 学习总览 ----

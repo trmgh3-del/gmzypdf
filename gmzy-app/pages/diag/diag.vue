@@ -197,7 +197,8 @@
             <view class="case-card gq-card">
                 <view class="case-qtag-row">
                     <text class="qtag">图考 · {{ gqCur.secName }}</text>
-                    <text v-if="gqCur.weak" class="gq-weak-tag">弱项复训</text>
+                    <text v-if="gqCur.mock" class="gq-weak-tag mock">模考回流</text>
+                    <text v-else-if="gqCur.weak" class="gq-weak-tag">弱项复训</text>
                     <text class="case-seq serif-font">{{ gqPos + 1 }}/{{ gqList.length }}</text>
                 </view>
                 <view class="gq-fig">
@@ -503,6 +504,7 @@
                         <view v-for="r in ledgerRows" :key="r.term" class="gq-ledger-row">
                             <text class="gq-ledger-term serif-font">{{ r.term }}</text>
                             <text class="gq-ledger-num">阅 {{ r.see }} · 对 {{ r.gqOk }} · 错 {{ r.gqNo }}</text>
+                            <text v-if="r.mock" class="gq-ledger-mock" title="模考错题中出现过此术语">模 {{ r.mock }}</text>
                             <text v-if="r.gqNo > r.gqOk" class="gq-ledger-weak">弱</text>
                         </view>
                         <text class="gq-ledger-clear" @tap="onClearStats">清空账本</text>
@@ -546,6 +548,9 @@
                 </view>
             </view>
         </view>
+
+        <!-- 段位晋升金榜 -->
+        <YuanqiCeremony :info="promoInfo" @close="promoInfo = null" />
     </view>
 </template>
 
@@ -554,12 +559,13 @@ import { ref, reactive, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { loadDiagRules, loadDeck, loadDiagAtlas, loadDiagQuiz, loadDiagGuide } from '../../common/learn.js'
 import { diagnose, symptomIndex, findVs, RED_FLAGS, DANGER_SYNS } from '../../common/diagnosis.js'
-import { store, pending, pushDiagRecord, clearDiagHistory, pushDiagQuiz, quizMistakes, setQuizAnswer, bumpAtlasStat, clearAtlasStats, bumpGqYuanqi, endGqStreak, gqRank } from '../../common/store.js'
+import { store, pending, pushDiagRecord, clearDiagHistory, pushDiagQuiz, quizMistakes, setQuizAnswer, bumpAtlasStat, clearAtlasStats, bumpGqYuanqi, endGqStreak, gqRank, awardExamEnergy } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
 import TongueSvg from '../../components/TongueSvg.vue'
 import PulseSvg from '../../components/PulseSvg.vue'
 import WangSvg from '../../components/WangSvg.vue'
 import WenSvg from '../../components/WenSvg.vue'
+import YuanqiCeremony from '../../components/YuanqiCeremony.vue'
 
 const DEFAULT_DISCLAIMER = '本功能仅供学习辨证思路参考，不能替代执业医师面诊，如有不适请及时就医。'
 
@@ -787,12 +793,17 @@ async function startGQ() {
     }
     const pool = gqPoolNow()
     const st = (store.learn && store.learn.atlasStats) || {}
-    // 弱项优先：错>对 的词条权重拉高（1 + 4×净错 + 0.5×错次），无记录者等权 1
+    const mm = (store.learn && store.learn.mockMissTerms) || {}
+    // 弱项优先：错>对 的词条权重拉高（1 + 4×净错 + 0.5×错次 + 2×模考回流），无记录者等权 1
     gqList.value = weightedSample(pool, GQ_N, (it) => {
         const v = st[it.term] || {}
         const weak = Math.max(0, (v.gqNo || 0) - (v.gqOk || 0))
-        const w = 1 + 4 * weak + 0.5 * (v.gqNo || 0)
-        return w
+        const mockHit = mm[it.term] || 0
+        return 1 + 4 * weak + 0.5 * (v.gqNo || 0) + 2 * mockHit
+    })
+    // 标记权重来源：模考回流优先显性标注
+    gqList.value.forEach((it) => {
+        it.mock = (mm[it.term] || 0) > 0
     })
     gqOk.value = 0
     gqDone.value = false
@@ -831,6 +842,16 @@ function makeGQ() {
     gqOpts.value = shuffleArr([cur.term, ...shuffleArr(samePool).slice(0, 3).map((x) => x.term)])
 }
 
+// 金榜：段位晋升仪式
+const promoInfo = ref(null)
+let promoTimer = null
+function showPromo(promo) {
+    if (!promo) return
+    promoInfo.value = promo
+    clearTimeout(promoTimer)
+    promoTimer = setTimeout(() => (promoInfo.value = null), 3200)
+}
+
 function pickGQ(c) {
     if (gqPicked.value) return
     gqPicked.value = c
@@ -838,8 +859,9 @@ function pickGQ(c) {
     if (c === cur.term) {
         gqOk.value++
         bumpAtlasStat(cur.term, 'gqOk')
-        const { streak, bonus } = bumpGqYuanqi()
+        const { streak, bonus, promo } = bumpGqYuanqi()
         if (bonus) uni.showToast({ icon: 'none', title: `🔥 连对 ${streak} · 元气 +${bonus}` })
+        showPromo(promo)
     } else {
         const hadStreak = (store.learn.gqYuanqi || {}).streak > 0
         gqMiss.value.push(cur.term)
@@ -881,10 +903,16 @@ function nextGQ() {
 const ledgerOpen = ref(false)
 const ledgerRows = computed(() => {
     const stats = (store.learn && store.learn.atlasStats) || {}
-    return Object.entries(stats)
-        .map(([term, v]) => ({ term, see: v.see || 0, gqOk: v.gqOk || 0, gqNo: v.gqNo || 0 }))
-        .filter((r) => r.see || r.gqOk || r.gqNo)
-        .sort((a, b) => b.gqNo - a.gqNo || b.see + b.gqOk + b.gqNo - (a.see + a.gqOk + a.gqNo))
+    const mm = (store.learn && store.learn.mockMissTerms) || {}
+    const mockSum = Object.values(mm).reduce((s, v) => s + v, 0)
+    const rows = Object.entries(stats)
+        .map(([term, v]) => ({ term, see: v.see || 0, gqOk: v.gqOk || 0, gqNo: v.gqNo || 0, mock: mm[term] || 0 }))
+        .filter((r) => r.see || r.gqOk || r.gqNo || r.mock)
+    // 模考回流但尚未被图考过的词条也入行
+    for (const [term, n] of Object.entries(mm)) {
+        if (n > 0 && !stats[term]) rows.push({ term, see: 0, gqOk: 0, gqNo: 0, mock: n })
+    }
+    return rows.sort((a, b) => b.gqNo + b.mock * 0.6 - (a.gqNo + a.mock * 0.6) || b.see - a.see)
 })
 const ledgerTotal = computed(() => {
     const rows = ledgerRows.value
@@ -898,7 +926,7 @@ const ledgerTotal = computed(() => {
 function onClearStats() {
     uni.showModal({
         title: '清空图谱账本？',
-        content: '将清空查原文与图考对错的全部统计。',
+        content: '将清空查原文、图考对错与模考回流的全部统计。',
         confirmText: '清空',
         confirmColor: '#8b3a3a',
         success: (r) => r.confirm && clearAtlasStats()
@@ -1096,7 +1124,10 @@ function pickCase(c) {
     if (casePicked.value) return
     casePicked.value = c
     const ok = c === caseCur.value.an
-    if (ok) caseOk.value++
+    if (ok) {
+        caseOk.value++
+        showPromo(awardExamEnergy(1)) // 医案对亦灌元气（三科共享段位池）
+    }
     pushDiagQuiz(ok)
     if (caseCur.value.u) setQuizAnswer('_diag_', caseCur.value.u, ok)
 }
@@ -1985,6 +2016,18 @@ function fmt(ts) {
     background: #b5242a;
     border-radius: 8rpx;
     padding: 2rpx 10rpx;
+}
+
+.gq-ledger-mock {
+    font-size: 20rpx;
+    color: #fffdf7;
+    background: #6e5a9e;
+    border-radius: 8rpx;
+    padding: 2rpx 10rpx;
+}
+
+.gq-weak-tag.mock {
+    background: #6e5a9e;
 }
 
 .gq-ledger-clear {

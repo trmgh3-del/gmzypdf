@@ -329,6 +329,30 @@ if len(th_list) < 8 or th_list != sorted(th_list):
     err(f'GQ_RANKS 阈值异常：{th_list}')
 print(f'  段位 {len(th_list)} 阶 · 元气系统挂载 · 弱项加权抽样 + 三科入口已接线')
 
+# 12) 段位晋升仪式 · 三科共享元气 · 模考回流
+print('\n[12] 金榜仪式·共享元气·模考回流')
+if not os.path.isfile(os.path.join(APP, 'components', 'YuanqiCeremony.vue')):
+    err('缺少 YuanqiCeremony.vue（金榜仪式组件）')
+for key in ('YuanqiCeremony', 'promoInfo', 'showPromo', 'awardExamEnergy', 'promo', '模考回流', 'mock'):
+    if key not in diagvue:
+        err(f'diag.vue 缺跨科联动：{key}')
+for key in ('awardExamEnergy', 'afterEnergyChange', 'bumpMockMissTerm', 'mockMissTerms', 'rankIdx'):
+    if key not in storejs:
+        err(f'store.js 缺共享元气/回流：{key}')
+if "clearAtlasStats" in storejs and 'mockMissTerms' not in storejs.split('clearAtlasStats')[1][:200]:
+    err('clearAtlasStats 未同步清模考回流')
+quizvue = open(os.path.join(APP, 'pages/quiz/quiz.vue'), encoding='utf-8').read()
+for key in ('YuanqiCeremony', 'awardExamEnergy', 'bumpMockMissTerm', 'absorbMockMisses', 'loadDiagAtlas', 'loadDiagRules'):
+    if key not in quizvue:
+        err(f'quiz.vue 缺跨科联动：{key}')
+if 'markMigrated' not in quizvue:
+    err('quiz 迁移守护丢失')
+# 模考能量档位：2/4/6 三档须按答出率切割
+for frag in ('rate >= 80 ? 6', 'rate >= 60 ? 4', ': 2'):
+    if frag not in quizvue:
+        err(f'模考元气分档缺少：{frag}')
+print('  金榜仪式组件两台共载 · 医案/模考同灌元气（2/4/6 档） · 错题题干别名回流图考权重')
+
 print()
 if fail:
     print(f'FAILED: {len(fail)} 项')

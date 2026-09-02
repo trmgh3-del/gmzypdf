@@ -105,13 +105,17 @@
                 </view>
             </view>
         </template>
+
+        <!-- 段位晋升金榜 -->
+        <YuanqiCeremony :info="promoInfo" @close="promoInfo = null" />
     </view>
 </template>
 
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
-import { loadQuizBook, loadQuizIndex, migrateLegacyLearn } from '../../common/learn.js'
+import { loadQuizBook, loadQuizIndex, loadDiagAtlas, loadDiagRules, migrateLegacyLearn } from '../../common/learn.js'
+import YuanqiCeremony from '../../components/YuanqiCeremony.vue'
 import {
     store,
     setQuizAnswer,
@@ -121,8 +125,11 @@ import {
     markMigrated,
     quizMistakes,
     quizDailySeries,
-    pushMockResult
+    pushMockResult,
+    awardExamEnergy,
+    bumpMockMissTerm
 } from '../../common/store.js'
+import { symptomIndex } from '../../common/diagnosis.js'
 import { applyNavTheme } from '../../common/theme.js'
 
 const bookKey = ref('')   // q<N>.json
@@ -233,6 +240,71 @@ function doSubmit() {
     mockResult.k = k
     mockResult.sec = sec
     pushMockResult({ n: list.value.length, k, s: sec })
+    // 跨科联动：模考按答出率灌注三科共享元气池；错题题干回流图考权重
+    const rate = list.value.length ? Math.round((k / list.value.length) * 100) : 0
+    showPromo(awardExamEnergy(rate >= 80 ? 6 : rate >= 60 ? 4 : 2))
+    absorbMockMisses()
+}
+
+// 模考错题 → 图谱术语命中回流（与图考弱项加权共用图谱账本）
+let atlasPairs = null // [[term, alias]...]
+async function atlasPairsNow() {
+    if (atlasPairs) return atlasPairs
+    const [atlas, rules] = await Promise.all([loadDiagAtlas(), loadDiagRules()])
+    const labels = {}
+    for (const g of rules.groups || []) for (const it of g.items || []) labels[it.id] = it.label
+    const pairs = []
+    const collect = (lst) =>
+        (lst || []).forEach((it) => {
+            const clean = String(it.term).replace(/[（(].*/, '').replace('·', '')
+            const alias = new Set()
+            if (clean.length >= 3) alias.add(clean)
+            ;(it.keys || []).forEach((kwd) => {
+                if (labels[kwd] && labels[kwd].length >= 2) alias.add(labels[kwd])
+            })
+            const m = clean.match(/^([一-龥]{1,3})脉$/)
+            if (m) {
+                alias.add(clean) // 2 字脉名特例放行（如 滑脉/弦脉）
+                const rev = '脉' + m[1]
+                if (rev.length >= 3) alias.add(rev) // 脉弦/脉细数…
+            }
+            alias.forEach((a) => pairs.push([it.term, a]))
+        })
+    collect(atlas.tongue)
+    collect(atlas.pulse)
+    collect(atlas.wang)
+    atlasPairs = pairs
+    return atlasPairs
+}
+
+async function absorbMockMisses() {
+    const wrong = mockWrong.value
+    if (!wrong.length) return
+    let pairs
+    try {
+        pairs = await atlasPairsNow()
+    } catch (e) {
+        return
+    }
+    for (const w of wrong) {
+        const text = typeof w.q === 'string' ? w.q : ''
+        if (!text) continue
+        const hit = new Set()
+        for (const [term, alias] of pairs) {
+            if (!hit.has(term) && alias && text.includes(alias)) hit.add(term)
+        }
+        hit.forEach((t) => bumpMockMissTerm(t))
+    }
+}
+
+// 金榜：段位晋升仪式
+const promoInfo = ref(null)
+let promoTimer = null
+function showPromo(promo) {
+    if (!promo) return
+    promoInfo.value = promo
+    clearTimeout(promoTimer)
+    promoTimer = setTimeout(() => (promoInfo.value = null), 3200)
 }
 
 function again() {
