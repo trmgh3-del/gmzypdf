@@ -1,5 +1,5 @@
 {
- "version": 4,
+ "version": 5,
  "disclaimer": "本系统依据教材证型规律编写，仅供学习辨证思路参考，不能替代执业医师面诊。如有不适请及时就医。",
  "groups": [
   {
@@ -7,52 +7,64 @@
    "name": "寒热与汗",
    "items": [
     {
-     "id": "wl",
-     "label": "恶寒重、发热轻"
-    },
-    {
      "id": "fr",
-     "label": "发热重、恶寒轻"
-    },
-    {
-     "id": "dh_bh",
-     "label": "但寒不热（怕冷无发热）"
-    },
-    {
-     "id": "dh_br",
-     "label": "但热不寒（高热）"
-    },
-    {
-     "id": "rccb",
-     "label": "日晡潮热（申时热甚）"
-    },
-    {
-     "id": "wc_cr",
-     "label": "午后潮热（低热）"
-    },
-    {
-     "id": "shenreb",
-     "label": "身热不扬（热势缠绵）"
-    },
-    {
-     "id": "hl_wl",
-     "label": "寒热往来（忽冷忽热）"
-    },
-    {
-     "id": "wuhan",
-     "label": "无汗"
-    },
-    {
-     "id": "zihan",
-     "label": "自汗（动辄汗出）"
+     "label": "发热重、恶寒轻",
+     "freq": 0.46
     },
     {
      "id": "daohan",
-     "label": "盗汗（睡中汗出）"
+     "label": "盗汗（睡中汗出）",
+     "freq": 0.38
+    },
+    {
+     "id": "wl",
+     "label": "恶寒重、发热轻",
+     "freq": 0.35
+    },
+    {
+     "id": "wc_cr",
+     "label": "午后潮热（低热）",
+     "freq": 0.35
+    },
+    {
+     "id": "wuhan",
+     "label": "无汗",
+     "freq": 0.23
+    },
+    {
+     "id": "zihan",
+     "label": "自汗（动辄汗出）",
+     "freq": 0.19
     },
     {
      "id": "ye_re",
-     "label": "夜热早凉（身热夜甚）"
+     "label": "夜热早凉（身热夜甚）",
+     "freq": 0.19
+    },
+    {
+     "id": "dh_br",
+     "label": "但热不寒（高热）",
+     "freq": 0.15
+    },
+    {
+     "id": "dh_bh",
+     "label": "但寒不热（怕冷无发热）",
+     "freq": 0.12
+    },
+    {
+     "id": "rccb",
+     "label": "日晡潮热（申时热甚）",
+     "freq": 0.12
+    },
+    {
+     "id": "shenreb",
+     "label": "身热不扬（热势缠绵）",
+     "freq": 0.12
+    },
+    {
+     "id": "hl_wl",
+     "label": "寒热往来（忽冷忽热）",
+     "freq": 0.12
     }
    ]
   },
@@ -61,36 +73,44 @@
    "name": "头面五官",
    "items": [
     {
-     "id": "toutong",
-     "label": "头痛"
-    },
-    {
-     "id": "touyun",
-     "label": "头晕目眩"
-    },
-    {
-     "id": "touzhong",
-     "label": "头重如裹"
-    },
-    {
-     "id": "kouku",
-     "label": "口苦"
+     "id": "mianbai",
+     "label": "面色㿠白或萎黄",
+     "freq": 0.62
     },
     {
      "id": "yanzao",
-     "label": "咽干口燥"
-    },
-    {
-     "id": "erming",
-     "label": "耳鸣耳聋"
+     "label": "咽干口燥",
+     "freq": 0.54
     },
     {
      "id": "mianhong",
-     "label": "面红目赤"
+     "label": "面红目赤",
+     "freq": 0.5
     },
     {
-     "id": "mianbai",
-     "label": "面色㿠白或萎黄"
+     "id": "touyun",
+     "label": "头晕目眩",
+     "freq": 0.46
+    },
+    {
+     "id": "kouku",
+     "label": "口苦",
+     "freq": 0.27
+    },
+    {
+     "id": "erming",
+     "label": "耳鸣耳聋",
+     "freq": 0.23
+    },
+    {
+     "id": "touzhong",
+     "label": "头重如裹",
+     "freq": 0.19
+    },
+    {
+     "id": "toutong",
+     "label": "头痛",
+     "freq": 0.15
     }
    ]
   },
@@ -99,56 +119,69 @@
    "name": "胸腹与呼吸",
    "items": [
     {
+     "id": "shimian",
+     "label": "失眠多梦",
+     "freq": 0.81
+    },
+    {
      "id": "kesou",
-     "label": "咳嗽"
-    },
-    {
-     "id": "tan_xi",
-     "label": "痰白清稀"
-    },
-    {
-     "id": "tan_huang",
-     "label": "痰黄黏稠"
-    },
-    {
-     "id": "yan_tong",
-     "label": "咽喉肿痛"
-    },
-    {
-     "id": "xiongmen",
-     "label": "胸闷"
-    },
-    {
-     "id": "xiezhang",
-     "label": "胁肋胀痛"
+     "label": "咳嗽",
+     "freq": 0.46
     },
     {
      "id": "wanfu",
-     "label": "脘腹胀满"
-    },
-    {
-     "id": "futong_xian",
-     "label": "腹痛喜按（按之痛减）"
-    },
-    {
-     "id": "futong_ju",
-     "label": "腹痛拒按"
+     "label": "脘腹胀满",
+     "freq": 0.46
     },
     {
      "id": "fanzao",
-     "label": "心烦"
+     "label": "心烦",
+     "freq": 0.38
     },
     {
      "id": "xinji",
-     "label": "心悸心慌"
+     "label": "心悸心慌",
+     "freq": 0.38
     },
     {
-     "id": "shimian",
-     "label": "失眠多梦"
+     "id": "yan_tong",
+     "label": "咽喉肿痛",
+     "freq": 0.31
+    },
+    {
+     "id": "xiezhang",
+     "label": "胁肋胀痛",
+     "freq": 0.31
+    },
+    {
+     "id": "xiongmen",
+     "label": "胸闷",
+     "freq": 0.23
+    },
+    {
+     "id": "tan_xi",
+     "label": "痰白清稀",
+     "freq": 0.19
+    },
+    {
+     "id": "tan_huang",
+     "label": "痰黄黏稠",
+     "freq": 0.19
+    },
+    {
+     "id": "futong_ju",
+     "label": "腹痛拒按",
+     "freq": 0.12
     },
     {
      "id": "outu",
-     "label": "恶心呕吐"
+     "label": "恶心呕吐",
+     "freq": 0.12
+    },
+    {
+     "id": "futong_xian",
+     "label": "腹痛喜按（按之痛减）",
+     "freq": 0.08
     }
    ]
   },
@@ -157,28 +190,34 @@
    "name": "饮食口味",
    "items": [
     {
-     "id": "kouke_leng",
-     "label": "口渴喜冷饮"
-    },
-    {
-     "id": "koudan",
-     "label": "口淡不渴"
-    },
-    {
      "id": "nadai",
-     "label": "纳呆食少（食欲差）"
+     "label": "纳呆食少（食欲差）",
+     "freq": 0.69
     },
     {
-     "id": "shanshi",
-     "label": "善食易饥（多食）"
+     "id": "kouke_leng",
+     "label": "口渴喜冷饮",
+     "freq": 0.54
     },
     {
      "id": "kougan_bw",
-     "label": "口干不欲饮"
+     "label": "口干不欲饮",
+     "freq": 0.23
+    },
+    {
+     "id": "koudan",
+     "label": "口淡不渴",
+     "freq": 0.12
+    },
+    {
+     "id": "shanshi",
+     "label": "善食易饥（多食）",
+     "freq": 0.12
     },
     {
      "id": "aifu",
-     "label": "嗳腐吞酸"
+     "label": "嗳腐吞酸",
+     "freq": 0.12
     }
    ]
   },
@@ -188,31 +227,38 @@
    "items": [
     {
      "id": "dabian_tang",
-     "label": "大便溏泄"
+     "label": "大便溏泄",
+     "freq": 0.38
     },
     {
      "id": "dabian_mi",
-     "label": "大便秘结"
-    },
-    {
-     "id": "wugeng",
-     "label": "五更泄泻（黎明即泻）"
+     "label": "大便秘结",
+     "freq": 0.31
     },
     {
      "id": "niao_duan",
-     "label": "小便短赤"
+     "label": "小便短赤",
+     "freq": 0.31
     },
     {
      "id": "niao_qing",
-     "label": "小便清长（夜尿多）"
+     "label": "小便清长（夜尿多）",
+     "freq": 0.27
+    },
+    {
+     "id": "wugeng",
+     "label": "五更泄泻（黎明即泻）",
+     "freq": 0.12
     },
     {
      "id": "niao_tong",
-     "label": "尿频尿急尿痛"
+     "label": "尿频尿急尿痛",
+     "freq": 0.12
     },
     {
      "id": "wanggu",
-     "label": "完谷不化（夹未消化食物）"
+     "label": "完谷不化（夹未消化食物）",
+     "freq": 0.04
     }
    ]
   },
@@ -222,47 +268,58 @@
    "items": [
     {
      "id": "shenpi",
-     "label": "神疲乏力"
-    },
-    {
-     "id": "shaoqi",
-     "label": "少气懒言"
-    },
-    {
-     "id": "fanshen",
-     "label": "烦躁不安"
-    },
-    {
-     "id": "shenhun",
-     "label": "神昏谵语"
-    },
-    {
-     "id": "shenzhong",
-     "label": "身重困倦"
-    },
-    {
-     "id": "weihan",
-     "label": "畏寒肢冷（四肢不温）"
+     "label": "神疲乏力",
+     "freq": 1.0
     },
     {
      "id": "yaoxi",
-     "label": "腰膝酸软"
+     "label": "腰膝酸软",
+     "freq": 0.5
+    },
+    {
+     "id": "weihan",
+     "label": "畏寒肢冷（四肢不温）",
+     "freq": 0.46
     },
     {
      "id": "wuxin",
-     "label": "五心烦热（手足心热）"
+     "label": "五心烦热（手足心热）",
+     "freq": 0.42
+    },
+    {
+     "id": "shenzhong",
+     "label": "身重困倦",
+     "freq": 0.31
     },
     {
      "id": "yiyu",
-     "label": "情志抑郁或急躁易怒"
+     "label": "情志抑郁或急躁易怒",
+     "freq": 0.31
+    },
+    {
+     "id": "shenhun",
+     "label": "神昏谵语",
+     "freq": 0.23
+    },
+    {
+     "id": "shaoqi",
+     "label": "少气懒言",
+     "freq": 0.19
+    },
+    {
+     "id": "fanshen",
+     "label": "烦躁不安",
+     "freq": 0.15
     },
     {
      "id": "taixi",
-     "label": "善太息（喜长叹气）"
+     "label": "善太息（喜长叹气）",
+     "freq": 0.12
     },
     {
      "id": "shuizhong",
-     "label": "面浮肢肿"
+     "label": "面浮肢肿",
+     "freq": 0.12
     }
    ]
   },
@@ -271,28 +328,34 @@
    "name": "疼痛特点",
    "items": [
     {
-     "id": "tong_youzou",
-     "label": "疼痛游走不定"
-    },
-    {
      "id": "tong_citong",
-     "label": "疼痛固定、刺痛经夜甚"
+     "label": "疼痛固定、刺痛经夜甚",
+     "freq": 0.27
     },
     {
      "id": "tong_zhang",
-     "label": "疼痛以胀为主"
+     "label": "疼痛以胀为主",
+     "freq": 0.27
     },
     {
      "id": "tong_leng",
-     "label": "冷痛、得温则减"
-    },
-    {
-     "id": "tong_yin",
-     "label": "隐痛绵绵、喜按"
+     "label": "冷痛、得温则减",
+     "freq": 0.12
     },
     {
      "id": "guanjie",
-     "label": "关节酸痛重着不利"
+     "label": "关节酸痛重着不利",
+     "freq": 0.04
+    },
+    {
+     "id": "tong_youzou",
+     "label": "疼痛游走不定",
+     "freq": 0.0
+    },
+    {
+     "id": "tong_yin",
+     "label": "隐痛绵绵、喜按",
+     "freq": 0.0
     }
    ]
   },
@@ -302,19 +365,23 @@
    "items": [
     {
      "id": "ban_zhen",
-     "label": "皮肤斑疹隐隐或显露"
-    },
-    {
-     "id": "sao_yang",
-     "label": "皮肤或外阴瘙痒"
-    },
-    {
-     "id": "yong_zhong",
-     "label": "皮肤痈肿疮疡"
+     "label": "皮肤斑疹隐隐或显露",
+     "freq": 0.19
     },
     {
      "id": "chu_xue",
-     "label": "出血（吐衄、便血、崩漏）"
+     "label": "出血（吐衄、便血、崩漏）",
+     "freq": 0.12
+    },
+    {
+     "id": "sao_yang",
+     "label": "皮肤或外阴瘙痒",
+     "freq": 0.08
+    },
+    {
+     "id": "yong_zhong",
+     "label": "皮肤痈肿疮疡",
+     "freq": 0.0
     }
    ]
   },
@@ -324,19 +391,23 @@
    "items": [
     {
      "id": "jing_tong",
-     "label": "经期小腹胀痛或刺痛"
-    },
-    {
-     "id": "jing_diao",
-     "label": "经期紊乱（先后不定期）"
+     "label": "经期小腹胀痛或刺痛",
+     "freq": 0.12
     },
     {
      "id": "dai_bai",
-     "label": "带下清稀量多"
+     "label": "带下清稀量多",
+     "freq": 0.12
     },
     {
      "id": "dai_huang",
-     "label": "带下黄稠臭秽"
+     "label": "带下黄稠臭秽",
+     "freq": 0.12
+    },
+    {
+     "id": "jing_diao",
+     "label": "经期紊乱（先后不定期）",
+     "freq": 0.0
     }
    ]
   },
@@ -345,32 +416,39 @@
    "name": "舌象",
    "items": [
     {
+     "id": "she_shaotai",
+     "label": "舌红少苔或无苔",
+     "freq": 0.77
+    },
+    {
      "id": "she_danbai",
-     "label": "舌淡、苔薄白"
+     "label": "舌淡、苔薄白",
+     "freq": 0.69
     },
     {
      "id": "she_honghuang",
-     "label": "舌红、苔黄"
-    },
-    {
-     "id": "she_baini",
-     "label": "舌苔白腻"
+     "label": "舌红、苔黄",
+     "freq": 0.62
     },
     {
      "id": "she_huangni",
-     "label": "舌苔黄腻"
-    },
-    {
-     "id": "she_shaotai",
-     "label": "舌红少苔或无苔"
-    },
-    {
-     "id": "she_zi",
-     "label": "舌紫暗或有瘀斑"
+     "label": "舌苔黄腻",
+     "freq": 0.54
     },
     {
      "id": "she_pang",
-     "label": "舌胖大、边有齿痕"
+     "label": "舌胖大、边有齿痕",
+     "freq": 0.54
+    },
+    {
+     "id": "she_baini",
+     "label": "舌苔白腻",
+     "freq": 0.38
+    },
+    {
+     "id": "she_zi",
+     "label": "舌紫暗或有瘀斑",
+     "freq": 0.35
     }
    ]
   },
@@ -379,44 +457,54 @@
    "name": "脉象",
    "items": [
     {
-     "id": "mai_fujin",
-     "label": "脉浮紧"
-    },
-    {
-     "id": "mai_fuhuan",
-     "label": "脉浮缓"
-    },
-    {
-     "id": "mai_fushuo",
-     "label": "脉浮数"
-    },
-    {
-     "id": "mai_chenchi",
-     "label": "脉沉迟"
+     "id": "mai_xishuo",
+     "label": "脉细数",
+     "freq": 0.77
     },
     {
      "id": "mai_xiruo",
-     "label": "脉细弱无力"
-    },
-    {
-     "id": "mai_xishuo",
-     "label": "脉细数"
+     "label": "脉细弱无力",
+     "freq": 0.73
     },
     {
      "id": "mai_xian",
-     "label": "脉弦"
+     "label": "脉弦",
+     "freq": 0.58
     },
     {
      "id": "mai_hua",
-     "label": "脉滑"
+     "label": "脉滑",
+     "freq": 0.58
+    },
+    {
+     "id": "mai_fushuo",
+     "label": "脉浮数",
+     "freq": 0.38
+    },
+    {
+     "id": "mai_chenchi",
+     "label": "脉沉迟",
+     "freq": 0.35
     },
     {
      "id": "mai_se",
-     "label": "脉涩"
+     "label": "脉涩",
+     "freq": 0.23
+    },
+    {
+     "id": "mai_fujin",
+     "label": "脉浮紧",
+     "freq": 0.19
+    },
+    {
+     "id": "mai_fuhuan",
+     "label": "脉浮缓",
+     "freq": 0.12
     },
     {
      "id": "mai_hong",
-     "label": "脉洪大有力"
+     "label": "脉洪大有力",
+     "freq": 0.12
     }
    ]
   },
@@ -425,32 +513,39 @@
    "name": "妇科·经带产",
    "items": [
     {
-     "id": "yj_bld",
-     "label": "月经量多或淋沥不尽"
-    },
-    {
-     "id": "yj_dan",
-     "label": "月经色淡、质稀"
-    },
-    {
-     "id": "yj_anh",
-     "label": "经血紫暗有块"
-    },
-    {
      "id": "yj_delay",
-     "label": "月经周期延后"
+     "label": "月经周期延后",
+     "freq": 0.19
     },
     {
      "id": "chanhr_xu",
-     "label": "产后恶露淋沥超过三周不净"
+     "label": "产后恶露淋沥超过三周不净",
+     "freq": 0.19
     },
     {
      "id": "chan_ru_shao",
-     "label": "产后乳少、质清稀"
+     "label": "产后乳少、质清稀",
+     "freq": 0.19
+    },
+    {
+     "id": "yj_dan",
+     "label": "月经色淡、质稀",
+     "freq": 0.15
+    },
+    {
+     "id": "yj_anh",
+     "label": "经血紫暗有块",
+     "freq": 0.12
+    },
+    {
+     "id": "yj_bld",
+     "label": "月经量多或淋沥不尽",
+     "freq": 0.0
     },
     {
      "id": "dai_du",
-     "label": "带下腥臭、外阴瘙痒"
+     "label": "带下腥臭、外阴瘙痒",
+     "freq": 0.0
     }
    ]
   },
@@ -460,35 +555,43 @@
    "items": [
     {
      "id": "er_jingfeng",
-     "label": "惊风：抽搐、神昏、目上翻"
-    },
-    {
-     "id": "er_jire",
-     "label": "小儿高热骤起"
-    },
-    {
-     "id": "er_jishi",
-     "label": "厌食、嗳腐吞酸、腹胀"
-    },
-    {
-     "id": "er_dabian_chou",
-     "label": "大便酸臭夹不消化食渣"
+     "label": "惊风：抽搐、神昏、目上翻",
+     "freq": 0.19
     },
     {
      "id": "er_gan",
-     "label": "面黄肌瘦、肚大青筋"
+     "label": "面黄肌瘦、肚大青筋",
+     "freq": 0.19
     },
     {
      "id": "er_yn",
-     "label": "睡中遗尿、醒后方觉"
+     "label": "睡中遗尿、醒后方觉",
+     "freq": 0.19
     },
     {
-     "id": "er_qire",
-     "label": "睡中盗汗或自汗明显"
+     "id": "er_jire",
+     "label": "小儿高热骤起",
+     "freq": 0.12
     },
     {
      "id": "er_wei_ruo",
-     "label": "胃纳不佳、形体偏瘦"
+     "label": "胃纳不佳、形体偏瘦",
+     "freq": 0.12
+    },
+    {
+     "id": "er_jishi",
+     "label": "厌食、嗳腐吞酸、腹胀",
+     "freq": 0.08
+    },
+    {
+     "id": "er_dabian_chou",
+     "label": "大便酸臭夹不消化食渣",
+     "freq": 0.0
+    },
+    {
+     "id": "er_qire",
+     "label": "睡中盗汗或自汗明显",
+     "freq": 0.0
     }
    ]
   }

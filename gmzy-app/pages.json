@@ -1,5 +1,13 @@
 {
     "pages": [
+		{
+			"path": "pages/stats/stats",
+			"style": {
+				"navigationBarTitleText": "学习总览",
+				"navigationBarBackgroundColor": "#8b3a3a",
+				"navigationBarTextStyle": "white"
+			}
+		},
         {
             "path": "pages/index/index",
             "style": {

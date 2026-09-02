@@ -25,9 +25,9 @@
                         v-for="it in g.items"
                         :key="it.id"
                         class="chip"
-                        :class="{ on: selected[it.id] }"
+                        :class="{ on: selected[it.id], hot: it.freq >= 0.45 }"
                         @tap="toggleItem(it.id)"
-                    >{{ it.label }}</text>
+                    >{{ it.label }}<text v-if="it.freq >= 0.45" class="hot-dot"> 热</text></text>
                 </view>
             </view>
 
@@ -464,6 +464,16 @@ function fmt(ts) {
     flex-wrap: wrap;
     gap: 16rpx;
     padding: 0 24rpx 26rpx;
+}
+
+.chip.hot {
+    border-color: rgba(139, 58, 58, 0.35);
+}
+
+.hot-dot {
+    font-size: 18rpx;
+    color: #b3543f;
+    margin-left: 4rpx;
 }
 
 .chip {

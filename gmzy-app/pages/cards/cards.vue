@@ -73,6 +73,7 @@ import { onLoad, onShow } from '@dcloudio/uni-app'
 import { loadDecks, loadDeck, migrateLegacyLearn } from '../../common/learn.js'
 import { herbfangIndex } from './useHF.js'
 import { koujueFangIndex } from './useKF.js'
+import { loadDiagRules } from '../../common/learn.js'
 import {
     store,
     setCardMastery,
@@ -113,6 +114,7 @@ const herbName2Uuid = ref({})     // 中药名 → herb deck 的 uuid（方剂�
 const fangByHerb = ref({})        // 中药名 → [{front, uuid}]（中药卡反查用）
 const hfReady = ref(false)
 const kfSong = ref({})            // 方剂卡 front → 对应口诀卡（歌诀对照）
+const syns = ref([])              // 证型库（医案卡相似证型用）
 const kfFang = ref({})            // 口诀卡 uuid → 含方剂的方剂卡列表
 const kfReady = ref(false)
 
@@ -136,6 +138,9 @@ onLoad(async (q) => {
             fangByHerb.value = f
             hfReady.value = true
         })
+    }
+    if (deckId.value === 'yian') {
+        loadDiagRules().then((r) => (syns.value = r.syndromes || []))
     }
     if (deckId.value === 'fangji' || deckId.value === 'koujue') {
         koujueFangIndex().then(({ fang2song, song2fang }) => {
@@ -162,6 +167,21 @@ const hasAnchor = computed(() => {
     const m = cur.value.meta
     return m && m.book && m.g !== null && m.g !== undefined
 })
+// 纸纹：以 uuid 哈希出的色相与位移，每张卡独一无二的水印
+const markStyle = computed(() => {
+    const u = curUuid() || ''
+    let h = 0
+    for (const ch of u) h = ((h * 31 + ch.charCodeAt(0)) >>> 0)
+    const hue = h % 360
+    const x = 8 + (h % 30)
+    const y = 6 + ((h >> 5) % 24)
+    return {
+        background:
+            `radial-gradient(circle at ${x}% ${y}%, hsla(${hue}, 40%, 60%, 0.16), transparent 62%),` +
+            `radial-gradient(circle at ${100 - x}% ${100 - y}%, hsla(${(hue + 60) % 360}, 45%, 55%, 0.12), transparent 66%)`
+    }
+})
+
 const dueInfo = computed(() => {
     const real = queue.value[pos.value]
     if (real === undefined || !dueMode.value) return ''
@@ -313,6 +333,50 @@ function goFangKChip(c) {
     uni.navigateTo({ url: `/pages/cards/cards?deck=fangji&focus=${encodeURIComponent(c.uuid)}` })
 }
 
+/** 医案卡：该案涉及的证型（评按文本正则命中） */
+const yianChips = computed(() => {
+    if (deckId.value !== 'yian' || !flipped.value || !syns.value.length) return []
+    const back = String(cur.value.back || '')
+    const hits = []
+    for (const z of syns.value) {
+        const base = z.name.split(/[·（(]/)[0].replace(/证$/, '')
+        if (base.length >= 2 && back.includes(base)) hits.push(z.name)
+        if (hits.length >= 4) break
+    }
+    return hits
+})
+
+/** 方剂卡：组成药味+剂量计量表（解析 "桂枝三两（10克）" 式对偶） */
+const compPairs = computed(() => {
+    if (deckId.value !== 'fangji' || !flipped.value || !hfReady.value) return []
+    const m = String(cur.value.back || '').match(/[〔【]组成[〕】]\s*([^〔【〕】\n]+)/)
+    if (!m) return []
+    const seg = m[1]
+    // 按药名库锚点切分：每处药名后接的“两/钱/克/枚”字符直到下一药名
+    const names = Object.keys(herbName2Uuid.value).sort((a, b) => b.length - a.length)
+    const marks = []
+    for (const nm of names) {
+        let idx = -1
+        while ((idx = seg.indexOf(nm, idx + 1)) >= 0) {
+            marks.push([idx, nm])
+            if (marks.length > 24) break
+        }
+    }
+    marks.sort((a, b) => a[0] - b[0])
+    const out = []
+    for (let i = 0; i < marks.length && out.length < 10; i++) {
+        const [pos, nm] = marks[i]
+        const nxt = i + 1 < marks.length ? marks[i + 1][0] : seg.length
+        const dose = seg.slice(pos + nm.length, nxt).replace(/[\s　]+/g, ' ').trim()
+        if (dose) out.push({ herb: nm, dose: dose.replace(/（/g, '（').slice(0, 14) })
+    }
+    return out
+})
+
+function goSynChip(name) {
+    uni.navigateTo({ url: '/pages/search/search?q=' + encodeURIComponent(name) })
+}
+
 /** 中药卡：含该药的方剂 chip */
 const fangChips = computed(() => {
     if (deckId.value !== 'herb' || !flipped.value || !hfReady.value) return []
@@ -450,7 +514,17 @@ function te(e) {
     }
 }
 
+.card-mark {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+}
+
+.back-mark { opacity: 0.6; }
+
 .face {
+    overflow: hidden;
     position: absolute;
     inset: 0;
     backface-visibility: hidden;
@@ -492,6 +566,27 @@ function te(e) {
     font-size: 22rpx;
     color: #b3543f;
 }
+
+.comp-table {
+    margin-top: 18rpx;
+    background: rgba(61, 47, 26, 0.35);
+    border: 1rpx solid rgba(224, 199, 154, 0.25);
+    border-radius: 12rpx;
+    padding: 12rpx 20rpx;
+    width: 100%;
+}
+
+.comp-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 24rpx;
+    padding: 6rpx 0;
+    border-bottom: 1rpx dashed rgba(224, 199, 154, 0.2);
+}
+
+.comp-row:last-child { border-bottom: none; }
+.comp-herb { color: #f2e3bd; }
+.comp-dose { color: #c9ab7c; font-size: 22rpx; }
 
 .chip-row {
     display: flex;

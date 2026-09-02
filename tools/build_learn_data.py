@@ -442,21 +442,29 @@ def deck_yian():
                 continue
             aname = m.group(1).strip()
             g0 = anch.find("h", t)
-            # 收集本案块
+            # 收集本案块：主诉/现病史/西医诊断 等病历分层优先，评按兜底
+            brief_parts = []   # 精炼字段
             brief = ""
             pja = ""
-            got = 0
             j = i + 1
             while j < len(blks) and not (blks[j][0] == "h" and blks[j][1] <= 3):
                 tt = blks[j][2].strip()
-                if not brief and tt and not tt.startswith(("〔", "【")) and len(tt) > 14:
-                    brief = tt
-                    got += 1
-                if "〔评按〕" in tt or "【评按】 " in tt or tt.startswith("**〔评按〕"):
+                if not tt or tt.startswith(("（《", "》")):
+                    j += 1
+                    continue
+                if "〔评按〕" in tt or tt.startswith("**〔评按〕"):
                     pja = re.sub(r"\*|\[|\]|〔评按〕|【评按】|〈|〉", "", tt).strip()
-                if pja and "《" in tt and "页" in tt:
-                    pass
+                    break  # 引言区收尾于评按首句
+                # 病历式字段
+                m = re.match(r"^(主诉|现病史|症状|西医诊断|检查|诊察|脉诊)[:：]\s*(.+)$", tt)
+                if m and len(m.group(2)) > 6 and len(brief_parts) < 3:
+                    brief_parts.append(f"{m.group(1)}：{m.group(2)}")
+                elif not brief and len(tt) > 20 and not tt.startswith(("据统计", "《")):
+                    brief = tt
                 j += 1
+            if brief_parts:
+                brief = "‖".join(brief_parts)
+                brief = "《》".replace("‖", " ‖ ")
             if pja and brief and len(brief) > 20:
                 brief = re.sub(r"^(.{0,6}，(男|女)，[0-9]{1,3}岁[a-z0-9一-龥，。]*?)。", r"\1。", brief)
                 front = f"{aname}"

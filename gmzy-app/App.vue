@@ -44,6 +44,14 @@ view, text, scroll-view, image, input, picker, slider, button {
         'Noto Serif SC', 'SimSun', serif;
 }
 
+/* 主题切换平滑过渡（全局容器及通用卡件） */
+.learn, .diag, .cards, .quiz, .mine, .shelf, .search,
+.sec, .group, .rcard, .qcard, .face, .cell, .his-item, .bm-item,
+.res-item, .about, .wc-item, .atlas-item, .chip, .seg, .seg-item,
+.qtag, .cat-chip, .hot-chip, .term-chip, .dict-sheet, .hits {
+    transition: background-color .32s ease, color .32s ease, border-color .32s ease;
+}
+
 /* ================= 全局夜间模式（以 .night 双类名提权覆盖页面局部样式） ================= */
 /* 三套夜间主题：CSS 变量切换。页面根 class 形如 "night night-slate" */
 .night-theme-warm { --nbg: #17140f; --ncard: #25211a; --nt: #d9d0bf; --nmuted: #9a8f7d; --nline: #3a342a; --naccent: #d8b98a; --nsec: #2b261e; }

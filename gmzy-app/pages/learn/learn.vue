@@ -1,6 +1,7 @@
 <template>
     <view class="learn" :class="{ night, [themeCls]: night }">
         <!-- 学习总览 -->
+        <view class="hero-op" @tap="goStats">详表 ›</view>
         <view class="hero">
             <view class="hero-row">
                 <view class="hero-cell">
@@ -202,6 +203,10 @@ function coverOf(id) {
     return `/static/learn/cover-${id}.jpg`
 }
 
+function goStats() {
+    uni.navigateTo({ url: '/pages/stats/stats' })
+}
+
 function nt(d) {
     return newTodayCount(d.id)
 }
@@ -263,7 +268,17 @@ function openQuiz(b) {
     padding: 24rpx 24rpx 60rpx;
 }
 
+.hero-op {
+    position: absolute;
+    top: 24rpx;
+    right: 30rpx;
+    font-size: 22rpx;
+    color: rgba(243, 233, 210, 0.7);
+    z-index: 2;
+}
+
 .hero {
+    position: relative;
     background: linear-gradient(160deg, #6b2a20, #451611);
     border-radius: 22rpx;
     padding: 34rpx 12rpx 24rpx;

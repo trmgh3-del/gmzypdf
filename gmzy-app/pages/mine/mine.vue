@@ -68,6 +68,22 @@
             </view>
         </view>
 
+        <!-- 已完成的书籍徽章 -->
+        <view class="sec" v-if="finishedBooks.length">
+            <view class="sec-head">
+                <text class="sec-title">🎓 已研习完</text>
+                <text class="sec-op">{{ finishedBooks.length }} 本</text>
+            </view>
+            <scroll-view scroll-x class="fb-scroll">
+                <view v-for="b in finishedBooks" :key="b.slug" class="fb-item" @tap="openResume({
+                    slug: b.slug, chapter: '重温', pct: 100
+                })">
+                    <BookCover :title="b.title" :cover="b.cover" :width="110" />
+                    <text class="fb-badge serif-font">阅毕</text>
+                </view>
+            </scroll-view>
+        </view>
+
         <!-- 关于 -->
         <view class="sec">
             <view class="sec-head"><text class="sec-title">设置</text></view>
@@ -259,7 +275,24 @@ function doRestore() {
 
 const finishedCount = computed(() => {
     tick.value
-    return Object.values(store.progress).filter((p) => p.percent >= 0.995).length
+    return Object.values(store.progress).filter((p) => percentOf(p) >= 0.995).length
+})
+
+function percentOf(p) {
+    return p && p.percent ? p.percent : 0
+}
+
+const catalog = ref([])
+onShow(async () => {
+    if (!catalog.value.length) {
+        const { loadCatalog } = await import('../../common/books.js')
+        catalog.value = await loadCatalog()
+    }
+})
+
+const finishedBooks = computed(() => {
+    tick.value
+    return catalog.value.filter((b) => percentOf(store.progress[b.slug]) >= 0.995)
 })
 
 function pct(slug) {
@@ -319,6 +352,27 @@ function clearBm() {
 </script>
 
 <style lang="scss" scoped>
+.fb-scroll {
+    white-space: nowrap;
+}
+
+.fb-item {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8rpx;
+    margin-right: 18rpx;
+    vertical-align: top;
+}
+
+.fb-badge {
+    font-size: 22rpx;
+    color: #4a7c59;
+    background: rgba(74, 124, 89, 0.12);
+    border-radius: 999rpx;
+    padding: 4rpx 16rpx;
+}
+
 .mine {
     min-height: 100vh;
     background: #f6f1e5;
