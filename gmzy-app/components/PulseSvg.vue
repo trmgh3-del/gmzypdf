@@ -13,6 +13,9 @@
         <!-- 脉搏波形 -->
         <polyline :points="wave" fill="none" :stroke="stroke" :stroke-width="width"
             :stroke-opacity="cfg.dim || 1" stroke-linejoin="round" stroke-linecap="round" />
+        <!-- 点波动画（迟/数节律同步：迟脉慢、数疾脉快） -->
+        <polyline class="wave-live" :points="wave" fill="none" stroke="#d8112c" :stroke-width="width + 1.6"
+            stroke-linejoin="round" stroke-linecap="round" :style="{ animationDuration: dur }" />
         <!-- 前臂与腕横纹 -->
         <rect x="26" y="86" width="148" height="30" rx="14" fill="#f2dfca" stroke="rgba(139,58,58,0.25)" stroke-width="1.5" />
         <line x1="150" y1="86" x2="150" y2="116" stroke="rgba(120,70,50,0.4)" stroke-width="2" />
@@ -85,6 +88,8 @@ function genWave(shiftY) {
 
 const wave = computed(() => genWave(0))
 const waveH = computed(() => genWave(4))
+// 动画周期与脉率同步：一息四至为缓（2.2s）、五至为数（0.67s）……
+const dur = computed(() => (3.6 / cfg.value.rate).toFixed(2) + 's')
 </script>
 
 <style scoped>
@@ -97,6 +102,26 @@ const waveH = computed(() => genWave(4))
 .grid-t {
     font-size: 14px;
     fill: rgba(141, 131, 113, 0.7);
+}
+
+/* 心电图式行走亮点：沿波形任一脉形自动生效 */
+.wave-live {
+    stroke-dasharray: 26 300;
+    animation: waveMove 1.2s linear infinite;
+    opacity: 0.92;
+    pointer-events: none;
+}
+
+@keyframes waveMove {
+    to {
+        stroke-dashoffset: -326;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wave-live {
+        display: none;
+    }
 }
 
 .fp {

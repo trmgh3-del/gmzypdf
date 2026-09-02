@@ -80,6 +80,7 @@ print(f'  规则 {len(rules["syndromes"])} 证型 依据 {assert_ev} 医案 {sum
 atlas = load('diag', 'atlas.json')
 t_list, p_list, w_list = atlas.get('tongue', []), atlas.get('pulse', []), atlas.get('wang', [])
 wn_list, wj_list = atlas.get('wen', []), atlas.get('wenj', [])
+q_list = atlas.get('qie', [])
 if len(t_list) < 26:
     err(f'舌象图谱仅 {len(t_list)} < 26（细分未生效）')
 if len(p_list) < 20:
@@ -90,13 +91,15 @@ if len(wn_list) < 10:
     err(f'闻诊卡仅 {len(wn_list)} < 10')
 if len(wj_list) < 12:
     err(f'问诊卡仅 {len(wj_list)} < 12（十问歌拆解未齐）')
+if len(q_list) < 8:
+    err(f'切诊卡仅 {len(q_list)} < 8（按诊知识卡未齐）')
 if not atlas.get('song'):
     err('缺十问歌原文 song')
-for sec, lst in (('tongue', t_list), ('pulse', p_list), ('wang', w_list), ('wen', wn_list), ('wenj', wj_list)):
+for sec, lst in (('tongue', t_list), ('pulse', p_list), ('wang', w_list), ('wen', wn_list), ('wenj', wj_list), ('qie', q_list)):
     for it in lst:
         if not it.get('grp'):
             err(f'{sec} 词条缺分组 grp：{it["term"]}')
-        if sec in ('wang', 'wen', 'wenj') and not it.get('kind'):
+        if sec in ('wang', 'wen', 'wenj', 'qie') and not it.get('kind'):
             err(f'{sec} 词条缺 kind：{it["term"]}')
         if sec == 'wenj' and not it.get('num'):
             err(f'问诊词条缺数序 num：{it["term"]}')
@@ -131,14 +134,22 @@ for it in p_list:
 for it in w_list:
     if it['kind'] not in ks_w:
         err(f'望诊词条 kind 未在 WangSvg 注册：{it["kind"]}')
-# WenSvg kinds 闭环：wen/wenj 的 kind 必须在 WenSvg.vue 有分支
+# WenSvg kinds 闭环：wen/wenj/qie 的 kind 必须在 WenSvg.vue 有分支
 src_wn = open(os.path.join(APP, 'components', 'WenSvg.vue'), encoding='utf-8').read()
-for it in wn_list + wj_list:
+for it in wn_list + wj_list + q_list:
     if f"'{it['kind']}'" not in src_wn:
         err(f'WenSvg 无 kind 分支：{it["kind"]}')
+# 脉象点波动画接线
+src_ps = open(os.path.join(APP, 'components', 'PulseSvg.vue'), encoding='utf-8').read()
+for k in ('wave-live', 'waveMove', 'animationDuration', 'prefers-reduced-motion'):
+    if k not in src_ps:
+        err(f'PulseSvg 缺少点波动画元素：{k}')
+_diagvue4 = open(os.path.join(APP, 'pages/diag/diag.vue'), encoding='utf-8').read()
+if "atlasTab === 'qie'" not in _diagvue4:
+    err('diag.vue 缺切诊页签接线')
 grps = sorted({it['grp'] for it in t_list} | {it['grp'] for it in p_list} | {it['grp'] for it in w_list}
-              | {it['grp'] for it in wn_list} | {it['grp'] for it in wj_list})
-print(f'  五诊图册 {len(t_list)}舌 + {len(p_list)}脉 + {len(w_list)}望 + {len(wn_list)}闻 + {len(wj_list)}问 · 分组 {len(grps)} 类 · 桥接 {n_bridge} 条 · 图样全命中')
+              | {it['grp'] for it in wn_list} | {it['grp'] for it in wj_list} | {it['grp'] for it in q_list})
+print(f'  六诊图册 {len(t_list)}舌 + {len(p_list)}脉 + {len(w_list)}望 + {len(wn_list)}闻 + {len(wj_list)}问 + {len(q_list)}切 · 分组 {len(grps)} 类 · 桥接 {n_bridge} 条 · 点波动画已接线')
 
 # ---- 5 书籍箱健康 ----
 catalog = load('books-data', 'catalog.json')

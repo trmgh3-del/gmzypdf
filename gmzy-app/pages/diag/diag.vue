@@ -305,10 +305,10 @@
             </view>
         </template>
 
-        <!-- 舌脉望问闻五诊速查 -->
+        <!-- 舌脉望闻问切六诊图谱 -->
         <view v-if="step === 'pick'" class="sec atlas-sec">
             <view class="sec-head" @tap="toggleAtlas">
-                <text class="sec-title">👁 五诊速查（舌 {{ atlas.tongue.length }} · 脉 {{ atlas.pulse.length }} · 望 {{ (atlas.wang || []).length }} · 闻 {{ (atlas.wen || []).length }} · 问 {{ (atlas.wenj || []).length }}）</text>
+                <text class="sec-title">👁 诊法图谱速查（舌 {{ atlas.tongue.length }} · 脉 {{ atlas.pulse.length }} · 望 {{ (atlas.wang || []).length }} · 闻 {{ (atlas.wen || []).length }} · 问 {{ (atlas.wenj || []).length }} · 切 {{ (atlas.qie || []).length }}）</text>
                 <text class="sec-op">{{ atlasOpen ? '收起' : '展开' }}</text>
             </view>
             <view v-show="atlasOpen">
@@ -318,6 +318,7 @@
                     <text class="seg-item" :class="{ on: atlasTab === 'wang' }" @tap="atlasTab = 'wang'">望诊</text>
                     <text class="seg-item" :class="{ on: atlasTab === 'wen' }" @tap="atlasTab = 'wen'">闻诊</text>
                     <text class="seg-item" :class="{ on: atlasTab === 'wenj' }" @tap="atlasTab = 'wenj'">问诊</text>
+                    <text class="seg-item" :class="{ on: atlasTab === 'qie' }" @tap="atlasTab = 'qie'">切诊</text>
                 </view>
                 <!-- 十问歌原文 -->
                 <view v-if="atlasTab === 'wenj' && atlas.song" class="song-card">
@@ -391,7 +392,7 @@ const selected = reactive({})
 const openGroups = reactive({})
 const step = ref('pick')
 const results = ref([])
-const atlas = ref({ tongue: [], pulse: [], wang: [], wen: [], wenj: [], song: '' })
+const atlas = ref({ tongue: [], pulse: [], wang: [], wen: [], wenj: [], qie: [], song: '' })
 
 // 按 grp 相邻合并成组（舌色/舌形/舌态/苔色/苔质 · 脉位/脉率/脉形/节律 · 望面色/望神… · 听声音/嗅气味 · 十问拆解/兼问）
 const atlasGroups = computed(() => {
@@ -404,7 +405,9 @@ const atlasGroups = computed(() => {
                 ? atlas.value.wang || []
                 : atlasTab.value === 'wen'
                   ? atlas.value.wen || []
-                  : atlas.value.wenj || []
+                  : atlasTab.value === 'wenj'
+                    ? atlas.value.wenj || []
+                    : atlas.value.qie || []
     const out = []
     for (const it of list) {
         const last = out[out.length - 1]
@@ -1027,6 +1030,30 @@ function fmt(ts) {
 
 .atlas-sec { margin-top: 28rpx; }
 .atlas-seg { margin-bottom: 16rpx; }
+
+/* 六页签紧凑分段 */
+.seg {
+    display: flex;
+    background: #efe8d6;
+    border-radius: 14rpx;
+    padding: 4rpx;
+}
+
+.seg-item {
+    flex: 1;
+    text-align: center;
+    font-size: 23rpx;
+    color: #8d8371;
+    padding: 10rpx 6rpx;
+    border-radius: 11rpx;
+}
+
+.seg-item.on {
+    background: #fffdf7;
+    color: #8b3a3a;
+    font-weight: 700;
+    box-shadow: 0 2rpx 8rpx rgba(92, 62, 42, 0.12);
+}
 
 .atlas-grp-t {
     display: block;
