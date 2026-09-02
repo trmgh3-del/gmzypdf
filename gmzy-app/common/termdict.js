@@ -14,6 +14,7 @@ export function loadDict() {
         const map = new Map()
         const lists = await Promise.all(decks.map((d) => loadDeck(d.id)))
         decks.forEach((d, di) => {
+            if (d.id === 'yian') return // 医案案名长途不收入词条库
             for (const c of lists[di]) {
                 // 病证卡 front=病·证，取病名做词条（至少3字才收，防误命中）
                 let term = (c.front || '').trim()

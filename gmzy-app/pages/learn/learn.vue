@@ -361,6 +361,7 @@ function openQuiz(b) {
 .deck-point { background: linear-gradient(150deg, #35588b, #1e3054); }
 .deck-koujue { background: linear-gradient(150deg, #8b6f35, #54451e); }
 .deck-bingz { background: linear-gradient(150deg, #7a5a8b, #4a3060); }
+.deck-yian { background: linear-gradient(150deg, #4a7a70, #2a4a44); }
 
 .mig-tip {
     background: rgba(200, 147, 47, 0.12);

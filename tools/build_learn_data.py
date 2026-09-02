@@ -282,20 +282,48 @@ def deck_point():
     return cards
 
 
-# ---------------- 病证·方药卡（16中医外科学 / 20中医儿科学） ----------------
+# ---------------- 病证·方药卡（16外科学 / 19妇科学 / 20儿科学） ----------------
+def _extract_case(blks, i, stop_pat, mcase):
+    """从 i 之后收集 证候/治法/方例（药），遇到标题或下一编号条目停止。"""
+    zhenghou = zhifa = fang = ""
+    j = i + 1
+    end = min(len(blks), i + 14)
+    while j < end and blks[j][0] == "p":
+        tt = blks[j][2].strip()
+        if not tt:
+            j += 1
+            continue
+        if (mcase and mcase.match(tt)) or (stop_pat and stop_pat.match(tt)):
+            break
+        if tt.startswith("证候"):
+            zhenghou = re.sub(r"^证候[:：]?\s*", "", tt)
+        elif tt.startswith("治法"):
+            zhifa = re.sub(r"^治法[:：]?\s*", "", tt).rstrip("。")
+        elif tt.startswith(("方例", "方药", "验方", "处方")):
+            fang = re.sub(r"^(方例|方药|验方|处方)[:：]?\s*", "", tt).rstrip("。")
+        elif zhenghou and not zhifa and len(tt) < 110:
+            zhenghou += tt
+        j += 1
+    return zhenghou, zhifa, fang
+
+
 def deck_bingz():
     """病 → 证型 → 证候/治法/方药。
-    - 16外科：『N.××证：证候…』内联式（治法：、方药：同段）
-    - 20儿科：『1.证型名：』起头，后跟『证候：…治法：…方例：…』分段式"""
+    - inline(16外科)：『N.××证：证候…』内联式（治法：、方药：同段）
+    - block(20儿科)：『N.证型名：』起头，后跟 证候：…治法：…方例：…
+    - gyn(19妇科)：L1『N.类别：』下兼有直接卡与子项『（n）××证：』系列"""
     decks = []
-    for stem, mode in (("16中医外科学", "inline"), ("20中医儿科学", "block")):
+    plans = (("16中医外科学", "inline"), ("19中医妇科学", "gyn"), ("20中医儿科学", "block"))
+    for stem, mode in plans:
         slug = stem2slug(stem)
         anch = Anchor(stem, slug)
         blks = blocks_of(read(stem))
         cards = []
         cur_bing = cur_chap = ""
-        mcase = re.compile(r"^\d{1,2}[.．、]\s*(.{1,16}?证)[:：](.*)$") if mode == "inline" else \
-                re.compile(r"^(\d{1,2})[.．、]\s*([^：:]{1,12})[:：]\s*$")
+        mcase_inline = re.compile(r"^\d{1,2}[.．、]\s*(.{1,16}?证)[:：](.*)$")
+        mcase_block = re.compile(r"^(\d{1,2})[.．、]\s*([^：:]{1,12})[:：]\s*$")
+        mcase_l1 = mcase_block
+        mcase_sub = re.compile(r"^[（(]\d{1,2}[)）]\s*(.{1,14}?证)[:：]\s*$")
         i = 0
         while i < len(blks):
             kind, lv, t = blks[i]
@@ -306,60 +334,80 @@ def deck_bingz():
                     cur_bing = re.sub(r"^第[一二三四五六七八九十\d]+[章节]", "", t).split("（")[0].strip()
                 i += 1
                 continue
-            m = mcase.match(t) if t else None
-            if not m or not cur_bing:
+            if not cur_bing or not t:
                 i += 1
                 continue
+            front = zhenghou = zhifa = fang = ""
+            g0 = None
             if mode == "inline":
-                xing, zhenghou = m.group(1).strip(), m.group(2).strip()
-                zhifa = fang = ""
-                g0 = anch.find("p", t)
-                j = i + 1
-                while j < len(blks) and blks[j][0] != "h" and j - i <= 14:
-                    tt = blks[j][2].strip()
-                    if tt.startswith("治法"):
-                        zhifa = re.sub(r"^治法[:：]?\s*", "", tt).rstrip("。")
-                        k = j + 1
-                        while k < len(blks) and blks[k][0] == "p" and k - j <= 4:
-                            tf = blks[k][2].strip()
-                            if tf.startswith("方药"):
-                                fang = re.sub(r"^方药[:：]?\s*", "", tf).rstrip("。")
+                m = mcase_inline.match(t)
+                if m:
+                    xing, zhenghou = m.group(1).strip(), m.group(2).strip()
+                    g0 = anch.find("p", t)
+                    found = False
+                    j = i + 1
+                    while j < len(blks) and blks[j][0] != "h" and j - i <= 14:
+                        tt = blks[j][2].strip()
+                        if tt.startswith("治法"):
+                            zhifa = re.sub(r"^治法[:：]?\s*", "", tt).rstrip("。")
+                            k = j + 1
+                            while k < len(blks) and blks[k][0] == "p" and k - j <= 4:
+                                tf = blks[k][2].strip()
+                                if tf.startswith("方药"):
+                                    fang = re.sub(r"^方药[:：]?\s*", "", tf).rstrip("。")
+                                break
+                            found = True
                             break
-                        break
-                    if not zhifa and not label_of(tt) and len(tt) < 60 and "(" not in tt[:3]:
-                        zhenghou += tt
-                    j += 1
-                ok = zhifa and fang and zhenghou
-            else:  # block 儿科
-                xing = m.group(2).strip()
-                g0 = anch.find("p", t)
-                zhenghou = zhifa = fang = ""
-                j = i + 1
-                end = min(len(blks), i + 12)
-                while j < end and blks[j][0] == "p":
-                    tt = blks[j][2].strip()
-                    if mcase.match(tt):
-                        break
-                    if tt.startswith("证候"):
-                        zhenghou = re.sub(r"^证候[:：]?\s*", "", tt)
-                    elif tt.startswith("治法"):
-                        zhifa = re.sub(r"^治法[:：]?\s*", "", tt).rstrip("。")
-                    elif tt.startswith(("方例", "方药", "验方")):
-                        fang = re.sub(r"^方[例药验][:：]?\s*", "", tt).rstrip("。")
-                        if fang.startswith("方例"):
-                            fang = fang[2:].lstrip("：:")
-                    elif zhenghou and not zhifa and len(tt) < 100:
-                        zhenghou += tt
-                    j += 1
-                ok = zhifa and fang and zhenghou
-            if ok:
-                xing = xing if xing.endswith("证") or mode == "block" else xing + "证"
-                front = f"{cur_bing}·{xing}"
-                back = (f"【证候】{trunc(zhenghou, 90)}\n【治法】{trunc(zhifa, 40)}\n【方药】{trunc(fang, 70)}")
+                        if len(tt) < 60 and not label_of(tt):
+                            zhenghou += tt
+                        j += 1
+                    if zhifa and fang and zhenghou:
+                        front = f"{cur_bing}·{xing}"
+            elif mode == "block":
+                m = mcase_block.match(t)
+                if m:
+                    xing = m.group(2).strip()
+                    g0 = anch.find("p", t)
+                    zhenghou, zhifa, fang = _extract_case(blks, i, mcase_block, mcase_block)
+                    if zhifa and fang and zhenghou:
+                        front = f"{cur_bing}·{xing}"
+            else:  # gyn
+                m1 = mcase_l1.match(t)
+                if m1:
+                    cat = m1.group(2).strip().rstrip("证")
+                    g0 = anch.find("p", t)
+                    # 子项 （n）××证： 系列
+                    subs = []
+                    j = i + 1
+                    while j < len(blks) and blks[j][0] == "p" and j - i <= 40:
+                        tt = blks[j][2].strip()
+                        ms = mcase_sub.match(tt)
+                        if ms:
+                            zh, zf, fa = _extract_case(blks, j, mcase_sub, mcase_l1)
+                            if zh and zf and fa:
+                                subs.append((ms.group(1).strip(), zh, zf, fa, anch.find("p", tt)))
+                        elif mcase_l1.match(tt):
+                            break
+                        j += 1
+                    for xing, zh, zf, fa, gg in subs:
+                        fr = f"{cur_bing}·{cat}{xing}"
+                        back = f"【证候】{trunc(zh, 90)}\n【治法】{trunc(zf, 40)}\n【方药】{trunc(fa, 70)}"
+                        cards.append({
+                            "front": fr, "sub": f"{stem}·{cur_chap}", "back": back,
+                            "meta": {"deck": "bingz", "book": slug, "g": gg,
+                                     "uuid": "bingz:" + crc(fr + "|" + back)}
+                        })
+                    if subs:
+                        i += 1
+                        continue
+                    # 无子项：L1 自身为卡（如 3.脾虚：）
+                    zhenghou, zhifa, fang = _extract_case(blks, i, mcase_l1, mcase_l1)
+                    if zhifa and fang and zhenghou:
+                        front = f"{cur_bing}·{cat}证"
+            if front:
+                back = f"【证候】{trunc(zhenghou, 90)}\n【治法】{trunc(zhifa, 40)}\n【方药】{trunc(fang, 70)}"
                 cards.append({
-                    "front": front,
-                    "sub": f"{stem}·{cur_chap}",
-                    "back": back,
+                    "front": front, "sub": f"{stem}·{cur_chap}", "back": back,
                     "meta": {"deck": "bingz", "book": slug, "g": g0,
                              "uuid": "bingz:" + crc(front + "|" + back)}
                 })
@@ -367,6 +415,74 @@ def deck_bingz():
         print(f"  [{stem} {len(cards)}张 锚点miss:{anch.miss}]", end=" ")
         decks.extend(cards)
     return decks
+
+
+# ---------------- 医案卡（23名医医案选读：读案猜证） ----------------
+def deck_yian():
+    """每案一张：front=案名+主诉首尾，back=〔评按〕精要（猜证自测）。"""
+    stem = "23名医医案选读"
+    slug = stem2slug(stem)
+    anch = Anchor(stem, slug)
+    blks = blocks_of(read(stem))
+    cards = []
+    cur_chap = ""
+    i = 0
+    mh3 = re.compile(r"^\d+\.\d+\s+(.+案)$")
+    while i < len(blks):
+        kind, lv, t = blks[i]
+        if kind == "h" and lv == 2:
+            cur_chap = re.sub(r"^第[一二三四五六七八九十\d]+章", "", t).strip()
+            i += 1
+            continue
+        # h3 标题本身就是案名
+        if kind == "h" and lv == 3:
+            m = mh3.match(t)
+            if not m:
+                i += 1
+                continue
+            aname = m.group(1).strip()
+            g0 = anch.find("h", t)
+            # 收集本案块
+            brief = ""
+            pja = ""
+            got = 0
+            j = i + 1
+            while j < len(blks) and not (blks[j][0] == "h" and blks[j][1] <= 3):
+                tt = blks[j][2].strip()
+                if not brief and tt and not tt.startswith(("〔", "【")) and len(tt) > 14:
+                    brief = tt
+                    got += 1
+                if "〔评按〕" in tt or "【评按】 " in tt or tt.startswith("**〔评按〕"):
+                    pja = re.sub(r"\*|\[|\]|〔评按〕|【评按】|〈|〉", "", tt).strip()
+                if pja and "《" in tt and "页" in tt:
+                    pass
+                j += 1
+            if pja and brief and len(brief) > 20:
+                brief = re.sub(r"^(.{0,6}，(男|女)，[0-9]{1,3}岁[a-z0-9一-龥，。]*?)。", r"\1。", brief)
+                front = f"{aname}"
+                back = f"【案要】{trunc(brief, 80)}\n【评按】{trunc(pja, 110)}"
+                cards.append({
+                    "front": front,
+                    "sub": f"23医案·{cur_chap}",
+                    "back": back,
+                    "meta": {"deck": "yian", "book": slug, "g": g0,
+                             "uuid": "yian:" + crc(front + "|" + back)}
+                })
+                i = j
+                continue
+            i += 1
+            continue
+        i += 1
+    # 去重（同名案&同 back）
+    seen, out = set(), []
+    for c in cards:
+        k = c["meta"]["uuid"]
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(c)
+    print(f"  [锚点miss:{anch.miss}]", end=" ")
+    return out
 
 
 # ---------------- 口诀卡 ----------------
@@ -523,9 +639,10 @@ def main():
         ("point", "穴位卡", "定位取穴·主治功效", deck_point()),
         ("koujue", "口诀卡", "歌诀背诵·朗朗上口", deck_koujue()),
         ("bingz", "病证卡", "病→证→治法方药", deck_bingz()),
+        ("yian", "医案卡", "读案·猜证·悟思路", deck_yian()),
     ]
     summary = []
-    icons = {"fangji": "方", "herb": "药", "point": "穴", "koujue": "诀", "bingz": "证"}
+    icons = {"fangji": "方", "herb": "药", "point": "穴", "koujue": "诀", "bingz": "证", "yian": "案"}
     for did, name, desc, cards in decks:
         with open(os.path.join(LEARN_DIR, f"deck-{did}.json"), "w", encoding="utf-8") as f:
             json.dump(cards, f, ensure_ascii=False, separators=(",", ":"))

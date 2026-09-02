@@ -72,6 +72,7 @@ import { ref, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { loadDecks, loadDeck, migrateLegacyLearn } from '../../common/learn.js'
 import { herbfangIndex } from './useHF.js'
+import { koujueFangIndex } from './useKF.js'
 import {
     store,
     setCardMastery,
@@ -110,6 +111,9 @@ const focusUuid = ref('')
 const herbName2Uuid = ref({})     // 中药名 → herb deck 的 uuid（方剂卡药味用）
 const fangByHerb = ref({})        // 中药名 → [{front, uuid}]（中药卡反查用）
 const hfReady = ref(false)
+const kfSong = ref({})            // 方剂卡 front → 对应口诀卡（歌诀对照）
+const kfFang = ref({})            // 口诀卡 uuid → 含方剂的方剂卡列表
+const kfReady = ref(false)
 
 onLoad(async (q) => {
     deckId.value = q.deck || 'fangji'
@@ -130,6 +134,13 @@ onLoad(async (q) => {
             herbName2Uuid.value = h
             fangByHerb.value = f
             hfReady.value = true
+        })
+    }
+    if (deckId.value === 'fangji' || deckId.value === 'koujue') {
+        koujueFangIndex().then(({ fang2song, song2fang }) => {
+            kfSong.value = fang2song
+            kfFang.value = song2fang
+            kfReady.value = true
         })
     }
 })
@@ -274,6 +285,32 @@ const compChips = computed(() => {
     }
     return out
 })
+
+/** 方剂卡：可对照的歌诀卡 */
+const songChips = computed(() => {
+    if (deckId.value !== 'fangji' || !flipped.value || !kfReady.value) return []
+    const arr = kfSong.value.get(curUuid()) || []
+    return arr.slice(0, 6)
+})
+
+/** 口诀卡：本诀涉及的方剂卡 */
+const fangKChips = computed(() => {
+    if (deckId.value !== 'koujue' || !flipped.value || !kfReady.value) return []
+    const arr = kfFang.value.get(curUuid()) || []
+    return arr.slice(0, 6)
+})
+
+function curUuid() {
+    return uuidOf(queue.value[pos.value]) || ''
+}
+
+function goSongChip(c) {
+    uni.navigateTo({ url: `/pages/cards/cards?deck=koujue&focus=${encodeURIComponent(c.uuid)}` })
+}
+
+function goFangKChip(c) {
+    uni.navigateTo({ url: `/pages/cards/cards?deck=fangji&focus=${encodeURIComponent(c.uuid)}` })
+}
 
 /** 中药卡：含该药的方剂 chip */
 const fangChips = computed(() => {
