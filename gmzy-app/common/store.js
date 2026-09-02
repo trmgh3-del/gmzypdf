@@ -52,7 +52,9 @@ const defaults = {
         // 图考元气系统（三科共享池）: { energy 元气值, streak 图考连对, best 最佳连对, rankIdx 已至段位 }
         gqYuanqi: { energy: 0, streak: 0, best: 0, rankIdx: 0 },
         // 模考错题回流: { 图谱术语: 命中次数 }（模考错题题干扫到该术语，图考加权重）
-        mockMissTerms: {}
+        mockMissTerms: {},
+        // 知识条目已读: { 'slug:g': 时间戳 }（知识库条目学习系统）
+        kgDone: {}
     }
 }
 
@@ -82,6 +84,7 @@ function loadInitial() {
                 if (L.atlasStats && typeof L.atlasStats === 'object') init.learn.atlasStats = L.atlasStats
                 if (L.gqYuanqi) init.learn.gqYuanqi = Object.assign({ energy: 0, streak: 0, best: 0, rankIdx: 0 }, L.gqYuanqi)
                 if (L.mockMissTerms && typeof L.mockMissTerms === 'object') init.learn.mockMissTerms = L.mockMissTerms
+                if (L.kgDone && typeof L.kgDone === 'object') init.learn.kgDone = L.kgDone
             }
         }
     } catch (e) {
@@ -462,6 +465,36 @@ export function redeemMockMissTerm(term) {
         s.mockMissTerms[term]--
         if (s.mockMissTerms[term] <= 0) delete s.mockMissTerms[term]
     }
+}
+
+// ---- 知识条目已读 ----
+export function markKgRead(slug, g) {
+    const key = `${slug}:${g}`
+    if (!store.learn.kgDone) store.learn.kgDone = {}
+    if (store.learn.kgDone[key]) return false
+    store.learn.kgDone[key] = Date.now()
+    bumpActivity('kg')
+    return true
+}
+
+export function isKgRead(slug, g) {
+    return !!(store.learn.kgDone && store.learn.kgDone[`${slug}:${g}`])
+}
+
+export function kgReadCount() {
+    return store.learn.kgDone ? Object.keys(store.learn.kgDone).length : 0
+}
+
+export function kgLastRead() {
+    const d = store.learn.kgDone || {}
+    let last = null
+    for (const key of Object.keys(d)) {
+        if (!last || d[key] > last.ts) {
+            const [slug, g] = key.split(':')
+            last = { slug, g: +g, ts: d[key] }
+        }
+    }
+    return last
 }
 
 // ---- 温故日历：三科错题按 1 / 3 / 7 天阶梯复温 ----

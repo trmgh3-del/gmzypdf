@@ -44,6 +44,8 @@ function readJson(path) {
 }
 // #endif
 
+export { readJson }
+
 // ---------------- 对外 API ----------------
 
 let catalogCache = null

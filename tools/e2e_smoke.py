@@ -415,6 +415,61 @@ if 'createSSRApp' not in _bg:
     err('main.js 非 vue3 createSSRApp 结构')
 print('  入口=index · 根 index.html 齐 · vueVersion=3 · createSSRApp 主件')
 
+# 16) 分类知识库学习系统（九学科/知识条目/资料室附录化）
+print('\n[16] 分类知识库学习系统')
+kg_idx = os.path.join(APP, 'static/kg/index.json')
+if not os.path.isfile(kg_idx):
+    err('缺少 static/kg/index.json（运行 python3 tools/build_kg.py 生成）')
+else:
+    kg = _json.load(open(kg_idx, encoding='utf-8'))
+    if len(kg.get('cats', [])) != 9:
+        err(f'学科数须为 9，实得 {len(kg.get("cats", []))}')
+    if kg.get('totalEntries', 0) < 3000:
+        err(f'知识条目总量异常：{kg.get("totalEntries")}')
+    for c in kg['cats']:
+        if not c.get('entries'):
+            err(f'学科 {c["key"]} 无条目')
+        if not isinstance(c.get('decks'), list):
+            err(f'学科 {c["key"]} decks 字段缺失')
+    if not any(c.get('atlas') for c in kg['cats']):
+        err('缺少带图考入口的学科（中诊应挂 atlas）')
+kgjs = open(os.path.join(APP, 'common/kg.js'), encoding='utf-8').read()
+for key in ('loadKgIndex', 'getKgCat', 'kgArticle', 'entryBounds', 'entryNeighbors', 'kgEntries'):
+    if key not in kgjs:
+        err(f'kg.js 缺 {key}')
+if 'markKgRead' not in storejs or 'kgDone' not in storejs or 'kgLastRead' not in storejs:
+    err('store.js 缺条目已读电路（markKgRead/kgDone/kgLastRead）')
+if "bumpActivity('kg')" not in storejs:
+    err('store.js 未接 bumpActivity(kg)')
+indexvue = open(os.path.join(APP, 'pages/index/index.vue'), encoding='utf-8').read()
+for key in ('kg-grid', 'kg-cat', '全文资料室', 'goShelf', 'kgReadCount', 'goCat', 'lastRead'):
+    if key not in indexvue:
+        err(f'index.vue 缺知识库首页要素：{key}')
+if 'BookCover' in indexvue and 'shelf' not in indexvue.lower():
+    err('index.vue 残留书架渲染（应迁入 shelf 资料室）')
+for fname, keys in (
+    ('pages/kg/kg.vue', ('hub-tools', 'groupedEntries', 'goArticle', 'deckStats', 'en-item')),
+    ('pages/kgarticle/kgarticle.vue', ('BlocksView', 'markKgRead', 'goNext', 'ab-read', 'entryNeighbors')),
+    ('pages/shelf/shelf.vue', ('BookCover', 'booksOf', 'openBook', '全文资料室'))
+):
+    fp = os.path.join(APP, fname)
+    if not os.path.isfile(fp):
+        err(f'缺页 {fname}')
+    else:
+        fx = open(fp, encoding='utf-8').read()
+        for key in keys:
+            if key not in fx:
+                err(f'{fname} 缺 {key}')
+_pj2 = _json.loads(_re.sub(r'//[^\n]*', '', open(os.path.join(APP, 'pages.json'), encoding='utf-8').read()))
+_paths = {p2['path'] for p2 in _pj2['pages']}
+for need in ('pages/kg/kg', 'pages/kgarticle/kgarticle', 'pages/shelf/shelf'):
+    if need not in _paths:
+        err(f'pages.json 未登记 {need}')
+_tab_texts = [t.get('text') for t in _pj2.get('tabBar', {}).get('list', [])]
+if _tab_texts and _tab_texts[0] != '知识库':
+    err(f'tabBar 首页文案应为「知识库」，实得 {_tab_texts[0]}')
+print('  九学科索引 3470+ 条 · kg.js/kg展示/条目页/资料室齐备 · pages.json 12 页 · tabBar=知识库')
+
 print()
 if fail:
     print(f'FAILED: {len(fail)} 项')

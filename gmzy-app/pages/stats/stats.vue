@@ -143,7 +143,7 @@ onLoad(async () => {
     ;[decks.value, quizIdx.value] = await Promise.all([loadDecks(), loadQuizIndex()])
     // 学习天数 & 总动作量
     const act = store.learn.activity
-    totals.studyDays = Object.values(act).filter((a) => (a.cards || 0) + (a.quiz || 0) + (a.done || 0) > 0).length
+    totals.studyDays = Object.values(act).filter((a) => (a.cards || 0) + (a.quiz || 0) + (a.done || 0) + (a.kg || 0) > 0).length
     totals.answers = Object.values(act).reduce((s, a) => s + (a.cards || 0) + (a.quiz || 0), 0)
     totals.quizLeft = quizIdx.value.reduce((s, b) => {
         const done = store.learn.quizDone[b.f] || {}
@@ -224,7 +224,7 @@ const heat = computed(() => {
         const d = new Date(now - i * 86400000)
         const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
         const a = store.learn.activity[key] || { cards: 0, quiz: 0, done: 0 }
-        out.push({ day: key, dd: key.slice(8), n: (a.cards || 0) + (a.quiz || 0) + (a.done || 0) })
+        out.push({ day: key, dd: key.slice(8), n: (a.cards || 0) + (a.quiz || 0) + (a.done || 0) + (a.kg || 0) })
     }
     return out
 })
@@ -246,7 +246,7 @@ const wkHeat = computed(() => {
         const d = new Date(now - i * 86400000)
         const key = dayKey(d)
         const a = store.learn.activity[key] || {}
-        const n = (a.cards || 0) + (a.quiz || 0) + (a.done || 0) + (a.yuanqi || 0)
+        const n = (a.cards || 0) + (a.quiz || 0) + (a.done || 0) + (a.yuanqi || 0) + (a.kg || 0)
         out.push({ day: key, wd: i === 0 ? '今' : WD[d.getDay()], n })
     }
     return out
@@ -260,7 +260,7 @@ const wk = computed(() => {
         s.quiz += a.quiz || 0
         s.done += a.done || 0
         s.yuanqi += a.yuanqi || 0
-        if ((a.cards || 0) + (a.quiz || 0) + (a.done || 0) + (a.yuanqi || 0) > 0) s.days++
+        if ((a.cards || 0) + (a.quiz || 0) + (a.done || 0) + (a.yuanqi || 0) + (a.kg || 0) > 0) s.days++
     }
     return s
 })

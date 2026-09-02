@@ -2,8 +2,8 @@
     "name": "光明中医文库",
     "appid": "__UNI__0000000",
     "description": "光明中医函授教材 26 部全文离线文库 + 记忆卡/思考题学习系统 + 中医辨证辅助",
-    "versionName": "2.21.2",
-    "versionCode": 412,
+    "versionName": "2.22.0",
+    "versionCode": 420,
     "transformPx": false,
     "app-plus": {
         "usingComponents": true,

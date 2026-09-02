@@ -7,7 +7,7 @@ export function todayLearnedCount() {
     const d = new Date()
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
     const a = store.learn.activity[key] || {}
-    return (a.cards || 0) + (a.quiz || 0) + (a.done || 0)
+    return (a.cards || 0) + (a.quiz || 0) + (a.done || 0) + (a.kg || 0)
 }
 
 export function remindEnabledHour() {
