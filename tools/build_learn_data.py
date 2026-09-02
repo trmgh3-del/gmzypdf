@@ -282,66 +282,91 @@ def deck_point():
     return cards
 
 
-# ---------------- 病证·方药卡（16中医外科学） ----------------
+# ---------------- 病证·方药卡（16中医外科学 / 20中医儿科学） ----------------
 def deck_bingz():
-    """病 → 证型 → 证候/治法/方药 三段式提取。
-    《16中医外科学》"（三）常见证治"小节内的编号 "N.××证：…" + 治法： + 方药： 结构。"""
-    stem = "16中医外科学"
-    slug = stem2slug(stem)
-    anch = Anchor(stem, slug)
-    blks = blocks_of(read(stem))
-    cards = []
-    cur_bing = cur_chap = ""
-    i = 0
-    mcase = re.compile(r"^\d{1,2}[.．、]\s*(.{1,14}证)[:：](.*)$")
-    while i < len(blks):
-        kind, lv, t = blks[i]
-        if kind == "h":
-            if lv == 2:
-                cur_chap = t
-            elif lv == 3:
-                cur_bing = re.sub(r"^第[一二三四五六七八九十\d]+[章节]", "", t).split("（")[0].strip()
+    """病 → 证型 → 证候/治法/方药。
+    - 16外科：『N.××证：证候…』内联式（治法：、方药：同段）
+    - 20儿科：『1.证型名：』起头，后跟『证候：…治法：…方例：…』分段式"""
+    decks = []
+    for stem, mode in (("16中医外科学", "inline"), ("20中医儿科学", "block")):
+        slug = stem2slug(stem)
+        anch = Anchor(stem, slug)
+        blks = blocks_of(read(stem))
+        cards = []
+        cur_bing = cur_chap = ""
+        mcase = re.compile(r"^\d{1,2}[.．、]\s*(.{1,16}?证)[:：](.*)$") if mode == "inline" else \
+                re.compile(r"^(\d{1,2})[.．、]\s*([^：:]{1,12})[:：]\s*$")
+        i = 0
+        while i < len(blks):
+            kind, lv, t = blks[i]
+            if kind == "h":
+                if lv == 2:
+                    cur_chap = t
+                elif lv == 3:
+                    cur_bing = re.sub(r"^第[一二三四五六七八九十\d]+[章节]", "", t).split("（")[0].strip()
+                i += 1
+                continue
+            m = mcase.match(t) if t else None
+            if not m or not cur_bing:
+                i += 1
+                continue
+            if mode == "inline":
+                xing, zhenghou = m.group(1).strip(), m.group(2).strip()
+                zhifa = fang = ""
+                g0 = anch.find("p", t)
+                j = i + 1
+                while j < len(blks) and blks[j][0] != "h" and j - i <= 14:
+                    tt = blks[j][2].strip()
+                    if tt.startswith("治法"):
+                        zhifa = re.sub(r"^治法[:：]?\s*", "", tt).rstrip("。")
+                        k = j + 1
+                        while k < len(blks) and blks[k][0] == "p" and k - j <= 4:
+                            tf = blks[k][2].strip()
+                            if tf.startswith("方药"):
+                                fang = re.sub(r"^方药[:：]?\s*", "", tf).rstrip("。")
+                            break
+                        break
+                    if not zhifa and not label_of(tt) and len(tt) < 60 and "(" not in tt[:3]:
+                        zhenghou += tt
+                    j += 1
+                ok = zhifa and fang and zhenghou
+            else:  # block 儿科
+                xing = m.group(2).strip()
+                g0 = anch.find("p", t)
+                zhenghou = zhifa = fang = ""
+                j = i + 1
+                end = min(len(blks), i + 12)
+                while j < end and blks[j][0] == "p":
+                    tt = blks[j][2].strip()
+                    if mcase.match(tt):
+                        break
+                    if tt.startswith("证候"):
+                        zhenghou = re.sub(r"^证候[:：]?\s*", "", tt)
+                    elif tt.startswith("治法"):
+                        zhifa = re.sub(r"^治法[:：]?\s*", "", tt).rstrip("。")
+                    elif tt.startswith(("方例", "方药", "验方")):
+                        fang = re.sub(r"^方[例药验][:：]?\s*", "", tt).rstrip("。")
+                        if fang.startswith("方例"):
+                            fang = fang[2:].lstrip("：:")
+                    elif zhenghou and not zhifa and len(tt) < 100:
+                        zhenghou += tt
+                    j += 1
+                ok = zhifa and fang and zhenghou
+            if ok:
+                xing = xing if xing.endswith("证") or mode == "block" else xing + "证"
+                front = f"{cur_bing}·{xing}"
+                back = (f"【证候】{trunc(zhenghou, 90)}\n【治法】{trunc(zhifa, 40)}\n【方药】{trunc(fang, 70)}")
+                cards.append({
+                    "front": front,
+                    "sub": f"{stem}·{cur_chap}",
+                    "back": back,
+                    "meta": {"deck": "bingz", "book": slug, "g": g0,
+                             "uuid": "bingz:" + crc(front + "|" + back)}
+                })
             i += 1
-            continue
-        m = mcase.match(t)
-        if not m or not cur_bing:
-            i += 1
-            continue
-        xing, zhenghou = m.group(1).strip(), m.group(2).strip()
-        # 只看确实接 治法：的（排除普通编号列举）
-        zhifa = fang = ""
-        g0 = anch.find("p", t)
-        j = i + 1
-        while j < len(blks) and blks[j][0] != "h" and j - i <= 14:
-            tt = blks[j][2].strip()
-            if tt.startswith("治法"):
-                zhifa = re.sub(r"^治法[:：]?\s*", "", tt).rstrip("。")
-                k = j + 1
-                while k < len(blks) and blks[k][0] == "p" and k - j <= 4:
-                    tf = blks[k][2].strip()
-                    if not tf:
-                        k += 1
-                        continue
-                    if tf.startswith("方药"):
-                        fang = re.sub(r"^方药[:：]?\s*", "", tf).rstrip("。")
-                    break
-                break
-            if not zhifa and not label_of(tt) and len(tt) < 60 and not mcase.match(tt):
-                zhenghou += tt
-            j += 1
-        if zhifa and fang and zhenghou:
-            front = f"{cur_bing}·{xing}"
-            back = (f"【证候】{trunc(zhenghou, 90)}\n【治法】{trunc(zhifa, 40)}\n【方药】{trunc(fang, 70)}")
-            cards.append({
-                "front": front,
-                "sub": f"16外科学·{cur_chap}",
-                "back": back,
-                "meta": {"deck": "bingz", "book": slug, "g": g0,
-                         "uuid": "bingz:" + crc(front + "|" + back)}
-            })
-        i += 1
-    print(f"  [锚点miss:{anch.miss}]", end=" ")
-    return cards
+        print(f"  [{stem} {len(cards)}张 锚点miss:{anch.miss}]", end=" ")
+        decks.extend(cards)
+    return decks
 
 
 # ---------------- 口诀卡 ----------------

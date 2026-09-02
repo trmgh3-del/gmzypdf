@@ -14,15 +14,12 @@
                 <text class="hd serif-font">{{ b.x }}</text>
                 <view class="hd-line" v-if="b.l <= 2" />
             </view>
-            <!-- 段落 -->
+            <!-- 段落（含交叉引用互链） -->
             <view v-else-if="b.t === 'p'" class="para">
-                <text
-                    v-for="(s, si) in b.segs"
-                    :key="si"
-                    class="pt"
-                    :class="{ 'pt-bold': s.b }"
-                    :user-select="true"
-                >{{ s.x }}</text>
+                <template v-for="(s, si) in flatSegs(b)" :key="si">
+                    <text v-if="s.ref" class="pt pt-ref serif-font" @tap.stop="onRefTap(s.ref)">{{ s.x }}</text>
+                    <text v-else class="pt" :class="{ 'pt-bold': s.b }" :user-select="true">{{ s.x }}</text>
+                </template>
             </view>
             <!-- 图片 -->
             <view v-else-if="b.t === 'img'" class="fig" @tap.stop="$emit('img', b)">
@@ -57,7 +54,7 @@ const props = defineProps({
     dictMode: { type: Boolean, default: false } // 查词模式：点段落触发 blk 事件
 })
 
-const emit = defineEmits(['img', 'blk'])
+const emit = defineEmits(['img', 'blk', 'ref'])
 
 function onBlkTap(b, e) {
     if (!props.dictMode) return
@@ -69,6 +66,36 @@ function onBlkTap(b, e) {
 function blockClass(b) {
     if (b.t === 'h') return 'blk-h lvl-' + b.l
     return 'blk-' + b.t
+}
+
+/** 识别段内《书名》与『第X章/节/篇』互链（每段最多 8 处，防大开销） */
+const RE_REF = /(《[^》]{2,24}》)|(第[一二三四五六七八九十百〇零0-9]{1,6}[章节篇](?![0-9a-zA-Z\u4e00-\u9fa5]{0,6}题))/g
+
+function flatSegs(b) {
+    const out = []
+    for (const s0 of b.segs || []) {
+        const text = s0.x || ''
+        if (!text || text.length > 600) {
+            out.push({ x: text, b: s0.b })
+            continue
+        }
+        let last = 0
+        let n = 0
+        let m
+        RE_REF.lastIndex = 0
+        while ((m = RE_REF.exec(text)) && n < 8) {
+            if (m.index > last) out.push({ x: text.slice(last, m.index), b: s0.b })
+            out.push({ x: m[0], b: s0.b, ref: m[0] })
+            last = m.index + m[0].length
+            n++
+        }
+        out.push({ x: text.slice(last), b: s0.b })
+    }
+    return out.filter((sg) => sg.x)
+}
+
+function onRefTap(ref) {
+    emit('ref', ref)
 }
 
 function imgSrc(b) {

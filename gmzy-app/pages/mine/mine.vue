@@ -137,7 +137,7 @@ function toggleNight() {
 }
 
 // 记忆卡总数（含病证卡），写死随版本更新
-const CARD_NUM = '1151'
+const CARD_NUM = '1424'
 
 function pickQuota() {
     const opts = [10, 20, 30, 50, 999]

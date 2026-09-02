@@ -71,6 +71,11 @@ export function loadDiagRules() {
     return cached('static/diag/rules.json')
 }
 
+// ---- 舌脉速查 ----
+export function loadDiagAtlas() {
+    return cached('static/diag/atlas.json')
+}
+
 // ---- 旧学习数据迁移（索引键 → uuid 稳定键） ----
 // 检测由 store.hasLegacyKeys() 完成；映射表来自 static/learn/migrate-v1.json
 // （由 tools/make_migrate_v1.py 用旧版数据生成）。

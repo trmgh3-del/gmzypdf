@@ -25,7 +25,12 @@
             :lower-threshold="500"
             @tap="toggleBars"
         >
-            <view class="content-inner">
+            <view
+                class="content-inner"
+                :class="{ 'turn-l': turnDir === 'l', 'turn-r': turnDir === 'r' }"
+                @touchstart="csStart"
+                @touchend="csEnd"
+            >
                 <template v-for="ci in renderedIdx" :key="ci">
                     <BlocksView
                         :blocks="chapterBlocks(ci)"
@@ -33,6 +38,7 @@
                         :dict-mode="dictMode"
                         @img="previewImg"
                         @blk="onDictBlk"
+                        @ref="onRefLink"
                     />
                     <view class="chapter-sep">
                         <text class="chapter-sep-t">{{ chapters[ci].title }}</text>
@@ -82,6 +88,27 @@
             @jump="jumpToG"
         />
         <SettingsPanel v-model:show="showSettings" />
+        <!-- 图片缩放遮罩 -->
+        <view v-if="zoomImg" class="zoom-mask" @tap="closeZoom">
+            <movable-area class="zoom-area">
+                <movable-view
+                    class="zoom-view"
+                    direction="all"
+                    :scale="true"
+                    :scale-min="0.6"
+                    :scale-max="4"
+                    :scale-value="zoomInit"
+                    out-of-bounds
+                    @scale="onZoomScale"
+                    @tap.stop="zoomTap"
+                >
+                    <image class="zoom-img" :src="zoomImg.src" mode="widthFix" />
+                </movable-view>
+            </movable-area>
+            <text v-if="zoomImg.cap" class="zoom-cap">{{ zoomImg.cap }}</text>
+            <text class="zoom-close">轻点空白关闭 · 双击 2×</text>
+        </view>
+
         <DictSheet :show="dictOpen" :terms="dictTerms" :snippet="dictSnippet" @close="dictOpen = false" />
 
         <view class="toast" v-if="toast">{{ toast }}</view>
@@ -95,7 +122,7 @@
 import { computed, nextTick, onMounted, ref, getCurrentInstance } from 'vue'
 import { onLoad, onUnload, onBackPress, onShareAppMessage } from '@dcloudio/uni-app'
 import { loadBook, getBookMeta } from '../../common/books.js'
-import { store, saveProgress, pushHistory, addBookmark } from '../../common/store.js'
+import { store, saveProgress, pushHistory, addBookmark, pending } from '../../common/store.js'
 import {
     statusBarHeight, debounce, chapterOf, excerptText
 } from '../../common/util.js'
@@ -413,11 +440,136 @@ async function onDictBlk(b) {
     if (!hits.length) showToast('本段未命中卡片词条')
 }
 
+// ---- 图片双指缩放 ----
+const zoomImg = ref(null) // {src, cap}
+const zoomScale = ref(1)
+const zoomInit = ref(1)
+let lastTapZoom = 0
+
 function previewImg(b) {
-    uni.previewImage({
-        urls: [`/static/books/${slug.value}/${b.s}`]
-    })
+    zoomImg.value = { src: `/static/books/${slug.value}/${b.s}`, cap: b.a || '' }
+    zoomScale.value = 1
+    zoomInit.value = 1
 }
+
+function closeZoom() {
+    zoomImg.value = null
+}
+
+function onZoomScale(e) {
+    zoomScale.value = e.detail.scale
+}
+
+function zoomTap() {
+    const now = Date.now()
+    if (now - lastTapZoom < 300) {
+        zoomScale.value = zoomScale.value > 1 ? 1 : 2
+        zoomInit.value = zoomScale.value
+    }
+    lastTapZoom = now
+}
+
+// ---- 左右滑翻章 + 动画 ----
+const turnDir = ref('')
+const csX = ref(0)
+const csY = ref(0)
+
+function csStart(e) {
+    const t = e.changedTouches[0]
+    csX.value = t.clientX
+    csY.value = t.clientY
+}
+
+function csEnd(e) {
+    const t = e.changedTouches[0]
+    const dx = t.clientX - csX.value
+    const dy = Math.abs(t.clientY - csY.value)
+    if (Math.abs(dx) < 110 || dy > 90 || dictMode.value) return
+    if (dx < 0 && nextChapterAvail()) {
+        flash('l')
+        nextChapter()
+    } else if (dx > 0 && canPrev.value) {
+        flash('r')
+        prevChapter()
+    }
+}
+
+function nextChapterAvail() {
+    return visualChIdx.value < chapters.value.length - 1 || hasNext.value
+}
+
+function flash(d) {
+    turnDir.value = d
+    setTimeout(() => (turnDir.value = ''), 320)
+}
+
+// ---- 正文互链跳转 ----
+const HN = '一二三四五六七八九十'
+
+function han2num(x) {
+    x = x.replace(/[零〇]/g, '')
+    if (/^\d+$/.test(x)) return +x
+    if (x === '十') return 10
+    let n = 0
+    if (x.includes('百')) {
+        const [h, r] = x.split('百')
+        n += (Math.max(0, HN.indexOf(h)) + 1) * 100
+        x = r || ''
+    }
+    if (x.includes('十')) {
+        const [a, b] = x.split('十')
+        n += (a ? Math.max(0, HN.indexOf(a)) + 1 : 1) * 10 + (b ? Math.max(0, HN.indexOf(b)) + 1 : 0)
+        return n
+    }
+    const i = HN.indexOf(x)
+    return n + (i >= 0 ? i + 1 : 0)
+}
+
+let catCache = null
+async function catOf() {
+    if (!catCache) catCache = await loadCatalog()
+    return catCache
+}
+
+function onRefLink(ref) {
+    if (ref.startsWith('《')) {
+        const core = ref
+            .replace(/[《》]/g, '')
+            .replace(/(讲解|浅释|备要|辑要|订|指南|浅说|新版|重印)/g, '')
+            .trim()
+        catOf().then((list) => {
+            const hits = list.filter(
+                (c) => core.length >= 2 && (c.title.includes(core) || core.includes(c.title))
+            )
+            if (hits.length === 1) {
+                showToast('→ ' + hits[0].title)
+                uni.navigateTo({ url: `/pages/reader/reader?slug=${hits[0].slug}` })
+            } else {
+                showToast(hits.length > 1 ? `有 ${hits.length} 本书相关，已改为检索` : '未找到对应书目，已改为检索')
+                pending.keyword = core
+                uni.switchTab({ url: '/pages/search/search' })
+            }
+        })
+        return
+    }
+    const m = ref.match(/^第([一二三四五六七八九十百〇零0-9]{1,6})(章|节|篇)/)
+    if (!m) return
+    const n = han2num(m[1])
+    if (n <= 0) return
+    const kind = m[2]
+    const ci = chapters.value.findIndex(
+        (c) => c.title.startsWith(`第${m[1]}${kind}`) || c.title.startsWith(`第${n}${kind}`)
+    )
+    if (ci >= 0) {
+        renderFrom(ci)
+        recordJump()
+        showToast('→ ' + chapters.value[ci].title)
+    } else {
+        showToast(`本书目录中未收录「第${m[1]}${kind}」`)
+    }
+}
+
+
 
 const inst = getCurrentInstance()
 function bookmarkHere() {
@@ -532,6 +684,63 @@ onShareAppMessage(() => {
 .content {
     flex: 1;
     height: 100%;
+}
+
+.turn-l { animation: turnL .3s ease; }
+.turn-r { animation: turnR .3s ease; }
+@keyframes turnL {
+    from { transform: translateX(56px); opacity: 0.3; }
+    to   { transform: translateX(0);    opacity: 1; }
+}
+@keyframes turnR {
+    from { transform: translateX(-56px); opacity: 0.3; }
+    to   { transform: translateX(0);     opacity: 1; }
+}
+
+.zoom-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(12, 10, 8, 0.92);
+    z-index: 260;
+}
+
+.zoom-area {
+    position: absolute;
+    inset: 0;
+}
+
+.zoom-view {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+.zoom-img {
+    width: 100%;
+    max-height: 90vh;
+    object-fit: contain;
+}
+
+.zoom-cap {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 90rpx;
+    text-align: center;
+    color: #e8ddc8;
+    font-size: 26rpx;
+}
+
+.zoom-close {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 40rpx;
+    text-align: center;
+    color: #8a8070;
+    font-size: 22rpx;
 }
 
 .content-inner {

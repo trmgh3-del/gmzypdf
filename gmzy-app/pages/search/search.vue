@@ -58,6 +58,9 @@
                     <text class="res-book">《{{ r.bookTitle }}》</text>
                     <text class="res-chapter">{{ r.chapter }}</text>
                 </view>
+                <view class="res-terms" v-if="r.terms && r.terms.length">
+                    <text v-for="tk in r.terms" :key="tk.x" class="term-chip">{{ tk.x }}</text>
+                </view>
                 <view class="res-text">
                     <text v-for="(seg, si) in r.segments" :key="si" class="res-seg" :class="{ hl: seg.hl }">{{ seg.x }}</text>
                 </view>
@@ -76,6 +79,7 @@ import { loadCatalog, loadBook } from '../../common/books.js'
 import { pending, store } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
 import { blockText, chapterOf } from '../../common/util.js'
+import { loadDict } from '../../common/termdict.js'
 
 const catalog = ref([])
 onMounted(async () => {
@@ -129,6 +133,43 @@ function makeSegments(text, kw, maxLen = 96) {
     return segs
 }
 
+/** 用词条库把查询拆为『整句短语 + 已知术语 + 余段』，用于加权命中 */
+let dictTermsCache = null
+
+async function tokenize(q) {
+    if (!dictTermsCache) {
+        try {
+            dictTermsCache = await loadDict()
+        } catch (e) {
+            dictTermsCache = new Map()
+        }
+    }
+    const tokens = []
+    let rest = q
+    const names = Array.from(dictTermsCache.keys()).filter((n) => n.length >= 2)
+    while (rest) {
+        let best = null
+        let bestPos = Infinity
+        for (const nm of names) {
+            const i = rest.indexOf(nm)
+            if (i >= 0 && (i < bestPos || (i === bestPos && best && nm.length > best.length))) {
+                best = nm
+                bestPos = i
+            }
+        }
+        if (!best) {
+            if (rest !== q) tokens.push({ x: rest, w: 1 })
+            break
+        }
+        if (bestPos > 0) tokens.push({ x: rest.slice(0, bestPos), w: 1 })
+        tokens.push({ x: best, w: 5, term: true })
+        rest = rest.slice(bestPos + best.length)
+    }
+    if (tokens.length === 0) tokens.push({ x: q, w: 1 })
+    tokens.unshift({ x: q, w: 10, phrase: true })
+    return tokens
+}
+
 async function doSearch() {
     const kw = keyword.value.trim()
     if (!kw || scanning.value) return
@@ -139,6 +180,26 @@ async function doSearch() {
     truncated.value = false
     scanning.value = true
     scanPct.value = 0
+
+    const tokens = await tokenize(kw)
+    const termTokens = tokens.filter((k) => k.term)
+
+    const scoreOf = (t) => {
+        let score = 0
+        let hitTerms = 0
+        for (const tk of tokens) {
+            if (!tk.x || tk.x.length < 2) continue
+            const idx = t.indexOf(tk.x)
+            if (idx < 0) continue
+            const cnt = t.split(tk.x).length - 1
+            score += tk.w * Math.min(cnt, 3)
+            if (tk.term) hitTerms++
+        }
+        // 整句命中无脑保留；否则若可拆出词条则要求至少 1 词条命中
+        const phraseHit = t.indexOf(tokens[0].x) >= 0
+        const pass = phraseHit || (termTokens.length ? hitTerms >= 1 : score >= 2)
+        return { score, hitTerms, pass }
+    }
 
     const targets = scopeIdx.value === 0
         ? catalog.value
@@ -155,13 +216,17 @@ async function doSearch() {
             const book = await loadBook(meta.slug)
             for (let g = 0; g < book.blocks.length; g++) {
                 const t = blockText(book.blocks[g])
-                if (t && t.indexOf(kw) >= 0) {
+                if (!t) continue
+                const sc = scoreOf(t)
+                if (sc.pass && sc.score > 0) {
                     const ch = book.chapters[chapterOf(book, g)]
                     found.push({
                         slug: meta.slug,
                         bookTitle: meta.title,
                         chapter: ch ? ch.title : '',
                         g,
+                        score: sc.score,
+                        terms: termTokens.filter((k) => t.indexOf(k.x) >= 0).slice(0, 4),
                         segments: makeSegments(t, kw)
                     })
                     if (found.length >= MAX_RESULTS) {
@@ -175,6 +240,7 @@ async function doSearch() {
         }
         if (truncated.value) break
     }
+    found.sort((a, b) => b.score - a.score || a.slug.localeCompare(b.slug) || a.g - b.g)
     scanPct.value = 100
     scanning.value = false
     results.value = found
@@ -362,6 +428,21 @@ function openResult(r) {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
+}
+
+.res-terms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10rpx;
+    margin-bottom: 10rpx;
+}
+
+.term-chip {
+    font-size: 20rpx;
+    color: #8b3a3a;
+    background: rgba(139, 58, 58, 0.09);
+    border-radius: 8rpx;
+    padding: 3rpx 12rpx;
 }
 
 .res-text {

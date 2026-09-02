@@ -29,6 +29,10 @@ const defaults = {
         quizDone: {},
         // 每日新卡计数: { '2026-09-01': { fangji: 12 } }
         newDaily: {},
+        // 每日答题对错: { '2026-09-01': { ok: 18, bad: 5 } }
+        quizDaily: {},
+        // 错题追踪: { 'q0.json': { 'q:xxxx': { m: 连续错, c: 连续对 } } }
+        qErr: {},
         // 每日活跃: { '2026-09-01': { cards: 10, quiz: 5, done: 1 } }
         activity: {},
         // 辨证记录: [{ ts, symptoms: [label...], top: { name, pct }, count }]
@@ -52,6 +56,8 @@ function loadInitial() {
                 if (L.cardMastery) init.learn.cardMastery = L.cardMastery
                 if (L.quizDone) init.learn.quizDone = L.quizDone
                 if (L.newDaily) init.learn.newDaily = L.newDaily
+                if (L.quizDaily) init.learn.quizDaily = L.quizDaily
+                if (L.qErr) init.learn.qErr = L.qErr
                 if (L.activity) init.learn.activity = L.activity
                 if (Array.isArray(L.diagHistory)) init.learn.diagHistory = L.diagHistory
             }
@@ -207,7 +213,14 @@ export function dueCardUuids(deckId) {
         const st = store.learn.cardMastery[k]
         if (st && typeof st === 'object' && st.next <= now) arr.push([k, st])
     }
-    arr.sort((a, b) => a[1].lv - b[1].lv || a[1].next - b[1].next)
+    // 风险分 = 掌握弱度 × 超期倍率（按今日到期适当上限防抖动）
+    const risk = (st) => {
+        const lvW = st.lv === 1 ? 3 : st.lv === 2 ? 2 : 1
+        const span = (st.ivl || 1) * DAY
+        const overdueR = Math.min(3, Math.max(0, (now - st.next) / span))
+        return lvW * (1 + overdueR)
+    }
+    arr.sort((a, b) => risk(b[1]) - risk(a[1]) || a[1].next - b[1].next)
     return arr.map((x) => x[0])
 }
 
@@ -240,10 +253,47 @@ export function markNewCardUsed(uuid) {
 }
 
 // ---- 题库 ----
-export function setQuizAnswer(bookSlug, qIdx, ok) {
-    if (!store.learn.quizDone[bookSlug]) store.learn.quizDone[bookSlug] = {}
-    store.learn.quizDone[bookSlug][qIdx] = ok ? 1 : 2
+export function setQuizAnswer(bookKey, uuid, ok) {
+    if (!store.learn.quizDone[bookKey]) store.learn.quizDone[bookKey] = {}
+    store.learn.quizDone[bookKey][uuid] = ok ? 1 : 2
+    // 错题追踪：连错 2 次进入错题包，连对 3 次释放
+    if (!store.learn.qErr[bookKey]) store.learn.qErr[bookKey] = {}
+    const e = store.learn.qErr[bookKey][uuid] || { m: 0, c: 0 }
+    if (ok) { e.c++; e.m = 0 } else { e.m++; e.c = 0 }
+    store.learn.qErr[bookKey][uuid] = e
+    // 每日对错统计（正确率曲线）
+    const t = todayStr()
+    if (!store.learn.quizDaily[t]) store.learn.quizDaily[t] = { ok: 0, bad: 0 }
+    store.learn.quizDaily[t][ok ? 'ok' : 'bad']++
     bumpActivity('quiz')
+}
+
+// 错题包（连错≥2）
+export function quizMistakes(bookKey) {
+    const errs = store.learn.qErr[bookKey] || {}
+    return Object.keys(errs).filter((u) => errs[u].m >= 2)
+}
+
+export function quizMistakeCount(bookKey) {
+    return quizMistakes(bookKey).length
+}
+
+export function isMistakeFree(uuid, bookKey) {
+    const e = (store.learn.qErr[bookKey] || {})[uuid]
+    return e && e.c >= 3 && e.m === 0
+}
+
+// 近 N 日答题对错序列，用于正确率图
+export function quizDailySeries(days = 7) {
+    const out = []
+    const now = new Date()
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * DAY)
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+        const v = store.learn.quizDaily[key] || { ok: 0, bad: 0 }
+        out.push({ day: key.slice(5), ok: v.ok, bad: v.bad, total: v.ok + v.bad })
+    }
+    return out
 }
 
 export function quizStatsOf(bookSlug, total) {

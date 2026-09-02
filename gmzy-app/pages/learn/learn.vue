@@ -76,6 +76,7 @@
             </view>
             <view v-for="b in quizBooks" :key="b.slug + b.book" class="qbook" @tap="openQuiz(b)">
                 <text class="qbook-name serif-font">{{ b.book }}</text>
+                <text v-if="qerr(b) > 0" class="qerr-chip" @tap.stop="openQuizErr(b)">错 {{ qerr(b) }}</text>
                 <view class="qbook-side">
                     <view class="qbook-bar">
                         <view class="qbook-fill" :style="{ width: qpct(b) + '%' }" />
@@ -97,6 +98,7 @@ import {
     store,
     deckStats,
     quizStatsOf,
+    quizMistakeCount,
     learnOverview,
     weekSeries,
     newPerDayLimit,
@@ -184,6 +186,16 @@ function qpct(b) {
 function openDeck(d) {
     const due = statOf(d).due
     uni.navigateTo({ url: '/pages/cards/cards?deck=' + d.id + (due ? '&due=1' : '') })
+}
+
+function qerr(b) {
+    return quizMistakeCount(quizKey(b))
+}
+
+function openQuizErr(b) {
+    uni.navigateTo({
+        url: `/pages/quiz/quiz?k=${encodeURIComponent(quizKey(b))}&title=${encodeURIComponent(b.book)}&err=1`
+    })
 }
 
 function openQuiz(b) {
@@ -437,6 +449,16 @@ function openQuiz(b) {
     &:first-of-type {
         border-top: none;
     }
+}
+
+.qerr-chip {
+    font-size: 22rpx;
+    color: #b3543f;
+    background: rgba(179, 84, 63, 0.12);
+    border-radius: 999rpx;
+    padding: 6rpx 16rpx;
+    margin-right: 12rpx;
+    flex-shrink: 0;
 }
 
 .qbook-name {

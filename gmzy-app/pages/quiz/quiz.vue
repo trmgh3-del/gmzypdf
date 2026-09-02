@@ -58,6 +58,21 @@
                 <view class="foot-line">
                     <text>已答 {{ stats.done || 0 }} 题 · 记住 {{ stats.know || 0 }} · 待巩固 {{ stats.dont || 0 }}</text>
                 </view>
+                <view class="acc-panel" v-if="daySeries.some((d) => d.total)">
+                    <view class="acc-bars">
+                        <view v-for="d in daySeries" :key="d.day" class="acc-col">
+                            <view class="acc-stack">
+                                <view class="acc-ok" :style="{ height: barOkH(d) + 'rpx' }" />
+                                <view class="acc-bad" :style="{ height: barBadH(d) + 'rpx' }" />
+                            </view>
+                            <text class="acc-day">{{ d.day.split('-')[1] }}</text>
+                        </view>
+                    </view>
+                    <text class="acc-legend">绿=答对 红=答错（近7日）</text>
+                </view>
+                <view class="weak-chip" v-if="weakChap" @tap="setFilter('weak')">
+                    薄弱区间：{{ weakChap.chapter }}（错 {{ weakChap.n }} 题，点我专攻）
+                </view>
             </view>
         </template>
     </view>
@@ -73,7 +88,9 @@ import {
     quizStatsOf,
     resetQuiz,
     hasLegacyKeys,
-    markMigrated
+    markMigrated,
+    quizMistakes,
+    quizDailySeries
 } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
 
@@ -86,6 +103,8 @@ const pos = ref(0)
 const filter = ref('all')
 const stats = reactive({})
 const night = ref(false)
+const missedCount = ref(0)
+const daySeries = ref([])
 const chapMode = ref(false)
 const chapRange = reactive({ s: 0, e: 0, title: '' })
 
@@ -95,12 +114,14 @@ const FILTERS = computed(() =>
               { key: 'chap', name: '本章' },
               { key: 'all', name: '全部' },
               { key: 'new', name: '未答' },
-              { key: 'weak', name: '待巩固' }
+              { key: 'weak', name: '待巩固' },
+              { key: 'missed', name: `错题${missedCount.value ? ' ' + missedCount.value : ''}` }
           ]
         : [
               { key: 'all', name: '全部' },
               { key: 'new', name: '未答' },
-              { key: 'weak', name: '待巩固' }
+              { key: 'weak', name: '待巩固' },
+              { key: 'missed', name: `错题${missedCount.value ? ' ' + missedCount.value : ''}` }
           ]
 )
 
@@ -116,7 +137,9 @@ onLoad(async (q) => {
     }
     uni.setNavigationBarTitle({ title: bookTitle.value || '复习思考题' })
     if (hasLegacyKeys()) await migrateLegacyLearn(store, markMigrated)
+    if (q.err === '1') filter.value = 'missed'
     list.value = await loadQuizBook(bookKey.value)
+    daySeries.value = quizDailySeries(7)
     refreshStats()
     buildQueue()
     ready.value = true
@@ -145,6 +168,28 @@ const state = computed(() => {
 
 function refreshStats() {
     Object.assign(stats, quizStatsOf(bookKey.value, list.value.length))
+    missedCount.value = quizMistakes(bookKey.value).length
+}
+
+// 薄弱章节：待巩固题最多的章节标签
+const weakChap = computed(() => {
+    const done = doneMap()
+    const cnt = {}
+    list.value.forEach((it) => {
+        if (done[it.u] === 2 && it.chapter) cnt[it.chapter] = (cnt[it.chapter] || 0) + 1
+    })
+    const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0]
+    return top ? { chapter: top[0], n: top[1] } : null
+})
+
+function barOkH(d) {
+    const max = Math.max(1, ...daySeries.value.map((x) => x.total))
+    return Math.round((d.ok / max) * 56)
+}
+
+function barBadH(d) {
+    const max = Math.max(1, ...daySeries.value.map((x) => x.total))
+    return Math.round((d.bad / max) * 56)
 }
 
 function inChapRange(it) {
@@ -157,6 +202,10 @@ function buildQueue() {
     if (filter.value === 'chap') idx = idx.filter((i) => inChapRange(list.value[i]))
     else if (filter.value === 'new') idx = idx.filter((i) => !done[list.value[i].u])
     else if (filter.value === 'weak') idx = idx.filter((i) => done[list.value[i].u] === 2)
+    else if (filter.value === 'missed') {
+        const miss = new Set(quizMistakes(bookKey.value))
+        idx = idx.filter((i) => miss.has(list.value[i].u))
+    }
     queue.value = idx
     if (pos.value >= queue.value.length) pos.value = 0
 }

@@ -115,6 +115,29 @@
             </view>
         </template>
 
+        <!-- 舌脉速查 -->
+        <view v-if="step === 'pick'" class="sec atlas-sec">
+            <view class="sec-head" @tap="toggleAtlas">
+                <text class="sec-title">👁 舌脉速查（10 舌 10 脉）</text>
+                <text class="sec-op">{{ atlasOpen ? '收起' : '展开' }}</text>
+            </view>
+            <view v-show="atlasOpen">
+                <view class="seg atlas-seg">
+                    <text class="seg-item" :class="{ on: atlasTab === 'she' }" @tap="atlasTab = 'she'">舌象</text>
+                    <text class="seg-item" :class="{ on: atlasTab === 'mai' }" @tap="atlasTab = 'mai'">脉象</text>
+                </view>
+                <view v-for="it in (atlasTab === 'she' ? atlas.tongue : atlas.pulse)" :key="it.term"
+                    class="atlas-item" @tap="atlasGo(it)">
+                    <view class="atlas-head">
+                        <text class="atlas-term serif-font">{{ it.term }}</text>
+                        <text class="atlas-src">{{ it.src }} ›</text>
+                    </view>
+                    <text class="atlas-desc">{{ it.desc }}</text>
+                </view>
+                <text class="atlas-tip">内容遵循传统教材描述，仅供学习参考。</text>
+            </view>
+        </view>
+
         <!-- 历史记录 -->
         <view v-if="step === 'pick' && history.length" class="sec">
             <view class="sec-head">
@@ -135,7 +158,7 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
-import { loadDiagRules, loadDeck } from '../../common/learn.js'
+import { loadDiagRules, loadDeck, loadDiagAtlas } from '../../common/learn.js'
 import { diagnose, symptomIndex, findVs } from '../../common/diagnosis.js'
 import { store, pending, pushDiagRecord, clearDiagHistory } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
@@ -147,6 +170,9 @@ const selected = reactive({})
 const openGroups = reactive({})
 const step = ref('pick')
 const results = ref([])
+const atlas = ref({ tongue: [], pulse: [] })
+const atlasOpen = ref(false)
+const atlasTab = ref('she')
 const compare = ref(null)
 const history = computed(() => store.learn.diagHistory)
 const night = ref(false)
@@ -181,6 +207,22 @@ function groupSelCount(g) {
 function toggleItem(id) {
     if (selected[id]) delete selected[id]
     else selected[id] = true
+}
+
+async function toggleAtlas() {
+    atlasOpen.value = !atlasOpen.value
+    if (atlasOpen.value && !atlas.value.tongue.length) {
+        try {
+            atlas.value = await loadDiagAtlas()
+        } catch (e) { /* 忽略 */ }
+    }
+}
+
+// 速查词条 → 全库检索教材原文
+function atlasGo(it) {
+    uni.setStorageSync('pendingQuery', it.term.replace(/[（(].*/, ''))
+    pending.keyword = it.term.replace(/[（(].*/, '')
+    uni.switchTab({ url: '/pages/search/search' })
 }
 
 function clearAll() {
@@ -395,6 +437,26 @@ function fmt(ts) {
     color: #8d8371;
 }
 
+
+.atlas-sec { margin-top: 28rpx; }
+.atlas-seg { margin-bottom: 16rpx; }
+.atlas-item {
+    background: #fffdf5;
+    border-radius: 14rpx;
+    padding: 20rpx 24rpx;
+    margin-bottom: 14rpx;
+    border: 1px solid rgba(139, 58, 58, 0.06);
+}
+.atlas-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8rpx;
+}
+.atlas-term { font-size: 28rpx; color: #5c2018; }
+.atlas-src { font-size: 20rpx; color: #a0916e; }
+.atlas-desc { font-size: 25rpx; color: #5c5646; line-height: 1.7; }
+.atlas-tip { font-size: 21rpx; color: #a0916e; }
 .result-head {
     display: flex;
     justify-content: space-between;

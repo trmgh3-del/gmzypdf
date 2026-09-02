@@ -71,6 +71,7 @@
 import { ref, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import { loadDecks, loadDeck, migrateLegacyLearn } from '../../common/learn.js'
+import { herbfangIndex } from './useHF.js'
 import {
     store,
     setCardMastery,
@@ -106,6 +107,10 @@ const touchX = ref(0)
 const quotaLeft = ref(0)
 const focusUuid = ref('')
 
+const herbName2Uuid = ref({})     // 中药名 → herb deck 的 uuid（方剂卡药味用）
+const fangByHerb = ref({})        // 中药名 → [{front, uuid}]（中药卡反查用）
+const hfReady = ref(false)
+
 onLoad(async (q) => {
     deckId.value = q.deck || 'fangji'
     if (hasLegacyKeys()) await migrateLegacyLearn(store, markMigrated)
@@ -120,6 +125,13 @@ onLoad(async (q) => {
     if (q.focus) focusUuid.value = decodeURIComponent(q.focus)
     buildQueue()
     ready.value = true
+    if (deckId.value === 'fangji' || deckId.value === 'herb') {
+        herbfangIndex().then(({ herbName2Uuid: h, fangByHerb: f }) => {
+            herbName2Uuid.value = h
+            fangByHerb.value = f
+            hfReady.value = true
+        })
+    }
 })
 
 onShow(() => {
@@ -241,6 +253,40 @@ function goNormal() {
 function toggleShuffle() {
     shuffled.value = !shuffled.value
     buildQueue()
+}
+
+/** 方剂卡：解析【组成】里的药味 chip（取书名命中的前 10 个） */
+const compChips = computed(() => {
+    if (deckId.value !== 'fangji' || !flipped.value || !hfReady.value) return []
+    const m = String(cur.value.back || '').match(/[〔【]组成[〕】]\s*([^〔【〕】\n]+)/)
+    if (!m) return []
+    const seg = m[1]
+    const names = Object.keys(herbName2Uuid.value).sort((a, b) => b.length - a.length)
+    const out = []
+    let rest = seg
+    for (const nm of names) {
+        if (out.length >= 10) break
+        const i = rest.indexOf(nm)
+        if (i >= 0) {
+            out.push({ name: nm, uuid: herbName2Uuid.value[nm] })
+            rest = rest.slice(i + nm.length)
+        }
+    }
+    return out
+})
+
+/** 中药卡：含该药的方剂 chip */
+const fangChips = computed(() => {
+    if (deckId.value !== 'herb' || !flipped.value || !hfReady.value) return []
+    return (fangByHerb.value[cur.value.front] || []).slice(0, 10)
+})
+
+function goHerbChip(c) {
+    uni.navigateTo({ url: `/pages/cards/cards?deck=herb&focus=${encodeURIComponent(c.uuid)}` })
+}
+
+function goFangChip(c) {
+    uni.navigateTo({ url: `/pages/cards/cards?deck=fangji&focus=${encodeURIComponent(c.uuid)}` })
 }
 
 function goSource() {
@@ -407,6 +453,28 @@ function te(e) {
     margin-top: 26rpx;
     font-size: 22rpx;
     color: #b3543f;
+}
+
+.chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12rpx;
+    margin-top: 18rpx;
+    align-items: center;
+}
+
+.chip-label {
+    font-size: 22rpx;
+    color: #e0c79a;
+    opacity: 0.8;
+}
+
+.hf-chip {
+    font-size: 24rpx;
+    padding: 8rpx 18rpx;
+    border-radius: 999rpx;
+    background: rgba(224, 199, 154, 0.16);
+    color: #f2e3bd;
 }
 
 .card-hint {
