@@ -1,5 +1,5 @@
 <template>
-    <view class="learn" :class="{ night }">
+    <view class="learn" :class="{ night, [themeCls]: night }">
         <!-- 学习总览 -->
         <view class="hero">
             <view class="hero-row">
@@ -41,10 +41,38 @@
 
         <view v-if="migrating" class="mig-tip">正在升级旧学习记录，请稍候…</view>
 
+        <!-- 本周学习报告 -->
+        <view class="sec weekly">
+            <view class="sec-head">
+                <text class="sec-title">本周战报</text>
+                <text class="sec-op wc-mood">{{ weeklyMood }}</text>
+            </view>
+            <view class="week-compare">
+                <view class="wc-item">
+                    <text class="wc-num serif-font">{{ wa.cards.cur }}</text>
+                    <text class="wc-label">背卡</text>
+                    <text class="wc-delta" :class="deltaCls(wa.cards)">{{ deltaText(wa.cards) }}</text>
+                </view>
+                <view class="wc-item">
+                    <text class="wc-num serif-font">{{ wa.quiz.cur }}</text>
+                    <text class="wc-label">答题</text>
+                    <text class="wc-delta" :class="deltaCls(wa.quiz)">{{ deltaText(wa.quiz) }}</text>
+                </view>
+                <view class="wc-item">
+                    <text class="wc-num serif-font">{{ wa.diag.cur }}</text>
+                    <text class="wc-label">辨证</text>
+                    <text class="wc-delta" :class="deltaCls(wa.diag)">{{ deltaText(wa.diag) }}</text>
+                </view>
+            </view>
+            <text class="wc-tip">对比上周同一 7 天 · 正数为进步</text>
+        </view>
+
         <!-- 记忆卡包 -->
         <view class="sec">
             <view class="sec-head"><text class="sec-title">记忆卡</text></view>
             <view v-for="d in decks" :key="d.id" class="deck" @tap="openDeck(d)">
+                <image class="deck-cover" :src="coverOf(d.id)" mode="aspectFill" />
+                <view class="deck-fade" />
                 <view class="deck-icon serif-font" :class="'deck-' + d.id">{{ d.icon }}</view>
                 <view class="deck-info">
                     <view class="deck-top">
@@ -98,6 +126,7 @@ import {
     store,
     deckStats,
     quizStatsOf,
+    weeklyCompare,
     quizMistakeCount,
     learnOverview,
     weekSeries,
@@ -115,12 +144,31 @@ const qstats = reactive({})
 const ov = reactive({ cards: 0, quiz: 0, activeDays: 0, diagCount: 0, todayCards: 0, todayQuiz: 0, streak: 0 })
 const week = ref([])
 const night = ref(false)
+const themeCls = computed(() => 'night-theme-' + (store.settings.nightTheme || 'warm'))
 const totalQuiz = ref(0)
 
 const dueTotal = computed(() => decks.value.reduce((s, d) => s + (statOf(d).due || 0), 0))
 const weekMax = computed(() => Math.max(8, ...week.value.map((d) => d.cards + d.quiz)))
 
 const newLimit = ref(20)
+const wa = ref({ cards: { cur: 0, prev: 0 }, quiz: { cur: 0, prev: 0 }, diag: { cur: 0, prev: 0 } })
+
+function deltaText(d) {
+    const diff = d.cur - d.prev
+    if (!diff && !d.cur) return '—'
+    if (diff > 0) return '+' + diff
+    return String(diff || 0)
+}
+
+function deltaCls(d) {
+    const diff = d.cur - d.prev
+    return diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat'
+}
+
+const weeklyMood = computed(() => {
+    const t = wa.value.cards.cur + wa.value.quiz.cur
+    return t >= 100 ? '状态极佳 🔥' : t >= 40 ? '保持不错' : t > 0 ? '加油赶超上周' : '本周还未开始'
+})
 const migrating = ref(false)
 
 onLoad(async () => {
@@ -143,11 +191,16 @@ onLoad(async () => {
 
 onShow(() => {
     night.value = applyNavTheme()
+    wa.value = weeklyCompare()
     Object.assign(ov, learnOverview())
     week.value = weekSeries()
     refreshDeckStats()
     refreshQuizStats()
 })
+
+function coverOf(id) {
+    return `/static/learn/cover-${id}.jpg`
+}
 
 function nt(d) {
     return newTodayCount(d.id)
@@ -334,6 +387,8 @@ function openQuiz(b) {
 }
 
 .deck {
+    position: relative;
+    overflow: hidden;
     display: flex;
     gap: 22rpx;
     padding: 22rpx 0;
@@ -345,6 +400,8 @@ function openQuiz(b) {
 }
 
 .deck-icon {
+    position: relative;
+    z-index: 1;
     width: 88rpx;
     height: 88rpx;
     border-radius: 18rpx;
@@ -362,6 +419,63 @@ function openQuiz(b) {
 .deck-koujue { background: linear-gradient(150deg, #8b6f35, #54451e); }
 .deck-bingz { background: linear-gradient(150deg, #7a5a8b, #4a3060); }
 .deck-yian { background: linear-gradient(150deg, #4a7a70, #2a4a44); }
+
+.weekly .wc-mood { color: #4a7c59; }
+
+.week-compare {
+    display: flex;
+    gap: 20rpx;
+    margin-top: 16rpx;
+}
+
+.wc-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6rpx;
+    background: #fffdf5;
+    border-radius: 14rpx;
+    padding: 20rpx 10rpx;
+    border: 1px solid rgba(139, 58, 58, 0.06);
+}
+
+.wc-num { font-size: 40rpx; color: #5c2018; }
+.wc-label { font-size: 23rpx; color: #8a8070; }
+.wc-delta { font-size: 21rpx; }
+.wc-delta.up { color: #4a7c59; }
+.wc-delta.down { color: #b3543f; }
+.wc-delta.flat { color: #a0916e; }
+
+.wc-tip {
+    font-size: 20rpx;
+    color: #a0916e;
+    margin-top: 12rpx;
+}
+
+.deck-cover {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: 58%;
+    z-index: 0;
+    opacity: 0.92;
+}
+
+.deck-fade {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    left: 0;
+    z-index: 0;
+    background: linear-gradient(90deg, #faf6ea 34%, rgba(250, 246, 234, 0.75) 52%, transparent 82%);
+}
+
+.night-theme-warm .deck-fade { background: linear-gradient(90deg, #25211a 34%, rgba(37, 33, 26, 0.75) 52%, transparent 82%); }
+.night-theme-slate .deck-fade { background: linear-gradient(90deg, #21252b 34%, rgba(33, 37, 43, 0.75) 52%, transparent 82%); }
+.night-theme-amber .deck-fade { background: linear-gradient(90deg, #261c12 34%, rgba(38, 28, 18, 0.75) 52%, transparent 82%); }
 
 .mig-tip {
     background: rgba(200, 147, 47, 0.12);

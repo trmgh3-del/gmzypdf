@@ -1,5 +1,5 @@
 <template>
-    <view class="diag" :class="{ night }">
+    <view class="diag" :class="{ night, [themeCls]: night }">
         <!-- 免责声明常驻 -->
         <view class="notice">
             <text class="notice-icon">⚠</text>
@@ -176,6 +176,7 @@ const atlasTab = ref('she')
 const compare = ref(null)
 const history = computed(() => store.learn.diagHistory)
 const night = ref(false)
+const themeCls = computed(() => 'night-theme-' + (store.settings.nightTheme || 'warm'))
 let idxMap = {}
 
 onLoad(async () => {

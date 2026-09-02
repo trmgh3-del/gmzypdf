@@ -1,5 +1,5 @@
 <template>
-    <view class="mine" :class="{ night }">
+    <view class="mine" :class="{ night, [themeCls]: night }">
         <!-- 统计卡 -->
         <view class="stats">
             <view class="stat">
@@ -78,6 +78,16 @@
                 </view>
                 <switch :checked="night" color="#8b3a3a" @change="toggleNight" @tap.stop />
             </view>
+            <view class="set-row" v-if="night" @tap="pickNightTheme">
+                <view class="set-info">
+                    <text class="set-name">夜间配色</text>
+                    <text class="set-desc">当前：{{ nightThemeName }} · 三种可选</text>
+                </view>
+                <view class="night-swatch">
+                    <text class="sw" v-for="t in NIGHT_THEMES" :key="t.id" :class="{ on: t.id === store.settings.nightTheme }"
+                        :style="{ background: t.c1, borderColor: t.c2 }" />
+                </view>
+            </view>
             <view class="set-row" @tap="pickQuota">
                 <view class="set-info">
                     <text class="set-name">每日新卡上限</text>
@@ -126,10 +136,29 @@ const history = computed(() => store.history)
 const bookmarks = computed(() => store.bookmarks)
 const tick = ref(0)
 const night = computed(() => store.settings.night)
+const themeCls = computed(() => 'night-theme-' + (store.settings.nightTheme || 'warm'))
 onShow(() => {
     tick.value++
     applyNavTheme()
 })
+
+const NIGHT_THEMES = [
+    { id: 'warm', name: '暖金', c1: 'linear-gradient(135deg,#25211a,#d8b98a)' , c2: '#d8b98a'},
+    { id: 'slate', name: '青灰', c1: 'linear-gradient(135deg,#21252b,#9dc3b8)', c2: '#9dc3b8' },
+    { id: 'amber', name: '暖棕', c1: 'linear-gradient(135deg,#261c12,#e8b168)', c2: '#e8b168' }
+]
+
+const nightThemeName = computed(() => NIGHT_THEMES.find((t) => t.id === store.settings.nightTheme)?.name || '暖金')
+
+function pickNightTheme() {
+    uni.showActionSheet({
+        itemList: NIGHT_THEMES.map((t) => t.name),
+        success: (r) => {
+            store.settings.nightTheme = NIGHT_THEMES[r.tapIndex].id
+            applyNavTheme()
+        }
+    })
+}
 
 function toggleNight() {
     setNight(!store.settings.night)
@@ -493,6 +522,25 @@ function clearBm() {
     font-size: 24rpx;
     color: #6d6455;
     line-height: 1.7;
+}
+
+.night-swatch {
+    display: flex;
+    gap: 10rpx;
+    align-items: center;
+}
+
+.sw {
+    width: 36rpx;
+    height: 36rpx;
+    border-radius: 50%;
+    border: 2rpx solid transparent;
+    opacity: 0.55;
+}
+
+.sw.on {
+    opacity: 1;
+    transform: scale(1.15);
 }
 
 .set-row {

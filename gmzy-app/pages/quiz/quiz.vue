@@ -1,5 +1,5 @@
 <template>
-    <view class="quiz" :class="{ night }">
+    <view class="quiz" :class="{ night, [themeCls]: night }">
         <view v-if="!ready" class="loading">题库加载中…</view>
         <template v-else-if="!queue.length">
             <view class="done-all">
@@ -103,6 +103,7 @@ const pos = ref(0)
 const filter = ref('all')
 const stats = reactive({})
 const night = ref(false)
+const themeCls = computed(() => 'night-theme-' + (store.settings.nightTheme || 'warm'))
 const missedCount = ref(0)
 const daySeries = ref([])
 const chapMode = ref(false)

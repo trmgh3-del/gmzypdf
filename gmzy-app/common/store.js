@@ -11,7 +11,8 @@ const defaults = {
         lineHeight: 1.8,
         theme: 'paper',      // paper | night | eye（阅读器内）
         serif: true,
-        night: false         // 全局夜间模式
+        night: false,          // 全局夜间模式
+        nightTheme: 'warm',  // 夜间配色：warm 暖金 / slate 青灰 / amber 暖棕
     },
     // 每本书的阅读进度: { slug: { chIdx, scrollTop, gIdx, percent, ts } }
     progress: {},
@@ -387,6 +388,31 @@ export function totalDue(decks) {
 // ---- 全局外观 ----
 export function setNight(on) {
     store.settings.night = !!on
+}
+
+// ================= 周度学习报告 =================
+
+// 本周(近7天含今天)与上周（再前7天）对比：背卡/答题/辨证
+export function weeklyCompare() {
+    const days = (arr, ts) => {
+        const d = new Date(ts)
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    }
+    const now = Date.now()
+    const out = {
+        cards: { cur: 0, prev: 0 },
+        quiz: { cur: 0, prev: 0 },
+        diag: { cur: 0, prev: 0 }
+    }
+    for (let i = 0; i < 14; i++) {
+        const key = days(null, now - i * DAY)
+        const a = store.learn.activity[key] || { cards: 0, quiz: 0, done: 0 }
+        const slot = i < 7 ? 'cur' : 'prev'
+        out.cards[slot] += a.cards || 0
+        out.quiz[slot] += a.quiz || 0
+        out.diag[slot] += a.done || 0
+    }
+    return out
 }
 
 // ================= 数据备份 / 恢复 =================

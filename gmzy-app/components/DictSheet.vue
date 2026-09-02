@@ -30,9 +30,11 @@
                     <view class="dc-actions">
                         <button class="dc-btn ghost" @tap="goCard">去背卡</button>
                         <button v-if="cur.book" class="dc-btn primary" @tap="goSource">查看原文 ›</button>
+                        <button class="dc-btn ghost" @tap="exportCard">存图</button>
                     </view>
                 </view>
             </scroll-view>
+            <canvas canvas-id="dictCardCanvas" class="dict-hide-canvas" />
         </view>
     </view>
 </template>
@@ -59,6 +61,107 @@ const cur = computed(() => props.terms[selIdx.value] || null)
 
 function close() {
     emit('close')
+}
+
+// ---- 词条卡导出图片（宣纸风 600x860 canvas） ----
+function wrapText(ctx, text, x, y, maxW, lh, maxLines = 30) {
+    let line = ''
+    let lines = 0
+    for (const ch of String(text)) {
+        if (ch === '\n' || ctx.measureText(line + ch).width > maxW) {
+            ctx.fillText(line, x, y)
+            y += lh
+            lines++
+            if (lines >= maxLines) {
+                ctx.fillText('…', x, y)
+                return y + lh
+            }
+            line = ch === '\n' ? '' : ch
+        } else {
+            line += ch
+        }
+    }
+    if (line) {
+        ctx.fillText(line, x, y)
+        y += lh
+    }
+    return y
+}
+
+function exportCard() {
+    if (!cur.value) return
+    const t = cur.value
+    const W = 600
+    const H = 860
+    const ctx = uni.createCanvasContext('dictCardCanvas', this)
+    // 底
+    ctx.setFillStyle('#f7f0dd')
+    ctx.fillRect(0, 0, W, H)
+    // 框线
+    ctx.setStrokeStyle('#c9b889')
+    ctx.setLineWidth(4)
+    ctx.strokeRect(18, 18, W - 36, H - 36)
+    ctx.setStrokeStyle('#e0d3ab')
+    ctx.setLineWidth(1)
+    ctx.strokeRect(30, 30, W - 60, H - 60)
+    // 卡包徽标
+    ctx.setFillStyle('#8b3a3a')
+    ctx.fillRect(48, 48, 64, 64)
+    ctx.setFillStyle('#f3e9d2')
+    ctx.setFontSize(34)
+    const DK = { fangji: '方', herb: '药', point: '穴', koujue: '诀', bingz: '证', yian: '案' }
+    ctx.fillText(DK[t.deck] || '卡', 66, 92)
+    // 词名
+    ctx.setFillStyle('#3a2e1e')
+    ctx.setFontSize(44)
+    ctx.fillText(t.front || t.term, 132, 92)
+    ctx.setFillStyle('#a0916e')
+    ctx.setFontSize(22)
+    ctx.fillText((t.deckName || '') + (t.sub ? ' · ' + t.sub : ''), 48, 158)
+    // 分隔
+    ctx.setStrokeStyle('#e0d3ab')
+    ctx.setLineWidth(1)
+    ctx.beginPath()
+    ctx.moveTo(48, 184)
+    ctx.lineTo(W - 48, 184)
+    ctx.stroke()
+    // 正文
+    ctx.setFillStyle('#4a4032')
+    ctx.setFontSize(26)
+    wrapText(ctx, t.back || '', 48, 232, W - 96, 44, 11)
+    // 落款
+    ctx.setFillStyle('#a0916e')
+    ctx.setFontSize(20)
+    ctx.fillText('光明中医文库 · 原文查词', 48, H - 70)
+    const date = new Date().toISOString().slice(0, 10)
+    ctx.fillText(date, W - 148, H - 70)
+
+    ctx.draw(false, () => {
+        setTimeout(() => {
+            uni.canvasToTempFilePath({
+                canvasId: 'dictCardCanvas',
+                success: (r) => {
+                    // #ifdef APP-PLUS
+                    uni.saveImageToPhotosAlbum({
+                        filePath: r.tempFilePath,
+                        success: () => uni.showToast({ title: '已存入相册', icon: 'none' }),
+                        fail: () => uni.showToast({ title: '保存失败', icon: 'none' })
+                    })
+                    // #endif
+                    // #ifdef H5
+                    const a = document.createElement('a')
+                    a.href = r.tempFilePath
+                    a.download = `${(t.front || t.term)}-词条卡.png`
+                    a.click()
+                    // #endif
+                    // #ifdef MP
+                    uni.saveImageToPhotosAlbum({ filePath: r.tempFilePath })
+                    // #endif
+                },
+                fail: () => uni.showToast({ title: '导出失败', icon: 'none' })
+            })
+        }, 380)
+    })
 }
 
 function goCard() {
@@ -198,6 +301,14 @@ function goSource() {
     line-height: 1.85;
     color: #4a453b;
     white-space: pre-line;
+}
+
+.dict-hide-canvas {
+    position: fixed;
+    left: -2000rpx;
+    top: -2000rpx;
+    width: 600px;
+    height: 860px;
 }
 
 .dc-actions {

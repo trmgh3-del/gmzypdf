@@ -1,5 +1,5 @@
 <template>
-    <view class="cards" :class="{ night }" @touchstart="ts" @touchend="te">
+    <view class="cards" :class="{ night, [themeCls]: night }" @touchstart="ts" @touchend="te">
         <view v-if="!ready" class="loading">卡片加载中…</view>
         <template v-else-if="!queue.length">
             <view class="done-all">
@@ -104,6 +104,7 @@ const filter = ref('all')
 const mastery = ref(0)
 const dueMode = ref(false)
 const night = ref(false)
+const themeCls = computed(() => 'night-theme-' + (store.settings.nightTheme || 'warm'))
 const touchX = ref(0)
 const quotaLeft = ref(0)
 const focusUuid = ref('')

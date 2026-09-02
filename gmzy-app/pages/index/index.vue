@@ -1,5 +1,5 @@
 <template>
-    <view class="shelf" :class="{ night }">
+    <view class="shelf" :class="{ night, [themeCls]: night }">
         <!-- 顶部横幅 -->
         <view class="hero">
             <view class="hero-inner">
@@ -113,6 +113,7 @@ onMounted(async () => {
 
 const showTick = ref(0)
 const night = computed(() => (showTick.value, store.settings.night))
+const themeCls = computed(() => 'night-theme-' + (store.settings.nightTheme || 'warm'))
 onShow(() => {
     showTick.value++
     applyNavTheme()

@@ -1,5 +1,5 @@
 <template>
-    <view class="search" :class="{ night }">
+    <view class="search" :class="{ night, [themeCls]: night }">
         <!-- 搜索栏 -->
         <view class="bar">
             <view class="bar-input">
@@ -106,6 +106,7 @@ const hotWords = ['桂枝汤', '小柴胡汤', '足三里', '三阴交', '脉浮
 const MAX_RESULTS = 300
 
 const night = computed(() => store.settings.night)
+const themeCls = computed(() => 'night-theme-' + (store.settings.nightTheme || 'warm'))
 onShow(() => {
     applyNavTheme()
     if (pending.keyword) {
