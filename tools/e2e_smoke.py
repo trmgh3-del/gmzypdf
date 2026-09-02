@@ -76,21 +76,41 @@ for z in rules['syndromes']:
             err(f'证型 {z["id"]} 引用症状 {k} 不存在')
 print(f'  规则 {len(rules["syndromes"])} 证型 依据 {assert_ev} 医案 {sum(1 for z in rules["syndromes"] if z.get("med"))}')
 
-# ---- 4 舌脉望诊图册（细分） ----
+# ---- 4 舌脉望问闻五诊图册（细分） ----
 atlas = load('diag', 'atlas.json')
 t_list, p_list, w_list = atlas.get('tongue', []), atlas.get('pulse', []), atlas.get('wang', [])
+wn_list, wj_list = atlas.get('wen', []), atlas.get('wenj', [])
 if len(t_list) < 26:
     err(f'舌象图谱仅 {len(t_list)} < 26（细分未生效）')
 if len(p_list) < 20:
     err(f'脉象图谱仅 {len(p_list)} < 20')
 if len(w_list) < 14:
     err(f'望诊图卡仅 {len(w_list)} < 14')
-for sec, lst in (('tongue', t_list), ('pulse', p_list), ('wang', w_list)):
+if len(wn_list) < 10:
+    err(f'闻诊卡仅 {len(wn_list)} < 10')
+if len(wj_list) < 12:
+    err(f'问诊卡仅 {len(wj_list)} < 12（十问歌拆解未齐）')
+if not atlas.get('song'):
+    err('缺十问歌原文 song')
+for sec, lst in (('tongue', t_list), ('pulse', p_list), ('wang', w_list), ('wen', wn_list), ('wenj', wj_list)):
     for it in lst:
         if not it.get('grp'):
             err(f'{sec} 词条缺分组 grp：{it["term"]}')
-        if sec == 'wang' and not it.get('kind'):
-            err(f'望诊词条缺 kind：{it["term"]}')
+        if sec in ('wang', 'wen', 'wenj') and not it.get('kind'):
+            err(f'{sec} 词条缺 kind：{it["term"]}')
+        if sec == 'wenj' and not it.get('num'):
+            err(f'问诊词条缺数序 num：{it["term"]}')
+# 反向桥接：舌脉词条 keys 必须是规则引擎里的合法症状 id
+sym_ids = {it['id'] for g in rules['groups'] for it in g['items']}
+n_bridge = 0
+for sec, lst in (('tongue', t_list), ('pulse', p_list)):
+    for it in lst:
+        for k in it.get('keys', []):
+            n_bridge += 1
+            if k not in sym_ids:
+                err(f'{sec} 桥接症状 id 不存在：{it["term"]} → {k}')
+if n_bridge < 24:
+    err(f'舌脉桥接仅 {n_bridge} 条 < 24')
 # 词条 → 组件图样的关键字闭环：每个词条必须命中组件 KINDS 里的至少一个关键字/kind
 import re as _re
 def kinds_of(comp):
@@ -111,8 +131,14 @@ for it in p_list:
 for it in w_list:
     if it['kind'] not in ks_w:
         err(f'望诊词条 kind 未在 WangSvg 注册：{it["kind"]}')
-grps = sorted({it['grp'] for it in t_list} | {it['grp'] for it in p_list} | {it['grp'] for it in w_list})
-print(f'  舌脉望诊图册 {len(t_list)}舌 + {len(p_list)}脉 + {len(w_list)}望 · 分组 {len(grps)} 类 · 图样关键字全命中')
+# WenSvg kinds 闭环：wen/wenj 的 kind 必须在 WenSvg.vue 有分支
+src_wn = open(os.path.join(APP, 'components', 'WenSvg.vue'), encoding='utf-8').read()
+for it in wn_list + wj_list:
+    if f"'{it['kind']}'" not in src_wn:
+        err(f'WenSvg 无 kind 分支：{it["kind"]}')
+grps = sorted({it['grp'] for it in t_list} | {it['grp'] for it in p_list} | {it['grp'] for it in w_list}
+              | {it['grp'] for it in wn_list} | {it['grp'] for it in wj_list})
+print(f'  五诊图册 {len(t_list)}舌 + {len(p_list)}脉 + {len(w_list)}望 + {len(wn_list)}闻 + {len(wj_list)}问 · 分组 {len(grps)} 类 · 桥接 {n_bridge} 条 · 图样全命中')
 
 # ---- 5 书籍箱健康 ----
 catalog = load('books-data', 'catalog.json')
@@ -249,10 +275,11 @@ print('\n[10] 论治加减·SVG图谱·结果端兜底')
 jj_n = sum(1 for z in rules['syndromes'] if z.get('jj'))
 if jj_n < 45:
     err(f'随证加减覆盖 {jj_n}/45 < 45')
-for key in ('dangerResult', 'comboHint', 'caseExplain', '恢复重练', 'TongueSvg', 'PulseSvg', 'WangSvg', 'atlasGroups'):
+for key in ('dangerResult', 'comboHint', 'caseExplain', '恢复重练', 'TongueSvg', 'PulseSvg', 'WangSvg', 'WenSvg',
+            'atlasGroups', 'bridge(', 'bridgedOn', 'toggleSym', "atlasTab === 'wen'", "atlasTab === 'wenj'"):
     if key not in diagvue:
         err(f'diag.vue 缺少 {key}')
-for comp in ('TongueSvg', 'PulseSvg', 'WangSvg'):
+for comp in ('TongueSvg', 'PulseSvg', 'WangSvg', 'WenSvg'):
     p = os.path.join(APP, 'components', comp + '.vue')
     if not os.path.isfile(p):
         err(f'缺少组件 {comp}.vue')

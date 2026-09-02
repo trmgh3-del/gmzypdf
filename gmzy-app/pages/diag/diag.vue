@@ -305,10 +305,10 @@
             </view>
         </template>
 
-        <!-- 舌脉望诊速查 -->
+        <!-- 舌脉望问闻五诊速查 -->
         <view v-if="step === 'pick'" class="sec atlas-sec">
             <view class="sec-head" @tap="toggleAtlas">
-                <text class="sec-title">👁 舌脉望诊速查（{{ atlas.tongue.length }} 舌 · {{ atlas.pulse.length }} 脉 · {{ (atlas.wang || []).length }} 望）</text>
+                <text class="sec-title">👁 五诊速查（舌 {{ atlas.tongue.length }} · 脉 {{ atlas.pulse.length }} · 望 {{ (atlas.wang || []).length }} · 闻 {{ (atlas.wen || []).length }} · 问 {{ (atlas.wenj || []).length }}）</text>
                 <text class="sec-op">{{ atlasOpen ? '收起' : '展开' }}</text>
             </view>
             <view v-show="atlasOpen">
@@ -316,23 +316,42 @@
                     <text class="seg-item" :class="{ on: atlasTab === 'she' }" @tap="atlasTab = 'she'">舌象</text>
                     <text class="seg-item" :class="{ on: atlasTab === 'mai' }" @tap="atlasTab = 'mai'">脉象</text>
                     <text class="seg-item" :class="{ on: atlasTab === 'wang' }" @tap="atlasTab = 'wang'">望诊</text>
+                    <text class="seg-item" :class="{ on: atlasTab === 'wen' }" @tap="atlasTab = 'wen'">闻诊</text>
+                    <text class="seg-item" :class="{ on: atlasTab === 'wenj' }" @tap="atlasTab = 'wenj'">问诊</text>
+                </view>
+                <!-- 十问歌原文 -->
+                <view v-if="atlasTab === 'wenj' && atlas.song" class="song-card">
+                    <text class="song-text serif-font">{{ atlas.song }}</text>
+                    <text class="song-tip">——《十问歌》（明·陈修园体，一句一卡片拆解）</text>
                 </view>
                 <view v-for="g in atlasGroups" :key="g.grp" class="atlas-grp">
                     <text class="atlas-grp-t serif-font">{{ g.grp }}</text>
                     <view v-for="it in g.items" :key="it.term" class="atlas-item" @tap="atlasGo(it)">
-                        <TongueSvg v-if="atlasTab === 'she'" :term="it.term" />
-                        <PulseSvg v-else-if="atlasTab === 'mai'" :term="it.term" />
-                        <WangSvg v-else :kind="it.kind" />
+                        <view
+                            v-if="atlasTab === 'she' || atlasTab === 'mai'"
+                            class="atlas-fig"
+                            :class="{ can: !!it.keys, pick: bridgedOn(it) }"
+                            @tap.stop="bridge(it)"
+                        >
+                            <TongueSvg v-if="atlasTab === 'she'" :term="it.term" />
+                            <PulseSvg v-else :term="it.term" />
+                            <text v-if="bridgedOn(it)" class="fig-mark">✓</text>
+                        </view>
+                        <WangSvg v-else-if="atlasTab === 'wang'" :kind="it.kind" />
+                        <WenSvg v-else :kind="it.kind" :num="it.num" />
                         <view class="atlas-main">
                             <view class="atlas-head">
                                 <text class="atlas-term serif-font">{{ it.term }}</text>
                                 <text class="atlas-src">{{ it.src }} ›</text>
                             </view>
+                            <text v-if="bridgeTip(it)" class="atlas-bridge">⊕ {{ bridgeTip(it) }}</text>
                             <text class="atlas-desc">{{ it.desc }}</text>
                         </view>
                     </view>
                 </view>
-                <text class="atlas-tip">示意图为程序化风格绘制，重在辨识要点；内容遵循传统教材描述，仅供学习参考。点条目可检索教材原文。</text>
+                <text class="atlas-tip">示意图为程序化风格绘制，重在辨识要点；点符号可检索教材原文。
+                    <text v-if="atlasTab === 'she' || atlasTab === 'mai'">点舌脉图可把对应症状直接勾入辨证（多候选则弹出选择）。</text>
+                </text>
             </view>
         </view>
 
@@ -363,6 +382,7 @@ import { applyNavTheme } from '../../common/theme.js'
 import TongueSvg from '../../components/TongueSvg.vue'
 import PulseSvg from '../../components/PulseSvg.vue'
 import WangSvg from '../../components/WangSvg.vue'
+import WenSvg from '../../components/WenSvg.vue'
 
 const DEFAULT_DISCLAIMER = '本功能仅供学习辨证思路参考，不能替代执业医师面诊，如有不适请及时就医。'
 
@@ -371,16 +391,20 @@ const selected = reactive({})
 const openGroups = reactive({})
 const step = ref('pick')
 const results = ref([])
-const atlas = ref({ tongue: [], pulse: [], wang: [] })
+const atlas = ref({ tongue: [], pulse: [], wang: [], wen: [], wenj: [], song: '' })
 
-// 按 grp 相邻合并成组（舌色/舌形/舌态/苔色/苔质 · 脉位/脉率/脉形/节律 · 望面色/望神…）
+// 按 grp 相邻合并成组（舌色/舌形/舌态/苔色/苔质 · 脉位/脉率/脉形/节律 · 望面色/望神… · 听声音/嗅气味 · 十问拆解/兼问）
 const atlasGroups = computed(() => {
     const list =
         atlasTab.value === 'she'
             ? atlas.value.tongue
             : atlasTab.value === 'mai'
               ? atlas.value.pulse
-              : atlas.value.wang || []
+              : atlasTab.value === 'wang'
+                ? atlas.value.wang || []
+                : atlasTab.value === 'wen'
+                  ? atlas.value.wen || []
+                  : atlas.value.wenj || []
     const out = []
     for (const it of list) {
         const last = out[out.length - 1]
@@ -389,6 +413,40 @@ const atlasGroups = computed(() => {
     }
     return out
 })
+
+// ---- 舌脉 → 辨证引擎的反向桥接：点图勾选对应症状 ----
+function bridgedOn(it) {
+    return !!(it.keys && it.keys.some((k) => selected[k]))
+}
+
+function bridgeTip(it) {
+    if (!it.keys || !it.keys.length) return ''
+    const labels = it.keys.map((k) => idxMap[k] || k)
+    return labels.length === 1 ? `可勾选「${labels[0]}」` : `可选勾选：${labels.join(' / ')}`
+}
+
+function toggleSym(k) {
+    if (selected[k]) {
+        delete selected[k]
+        uni.showToast({ icon: 'none', title: '已取消 · ' + (idxMap[k] || k) })
+    } else {
+        selected[k] = true
+        uni.showToast({ icon: 'none', title: '已勾 · ' + (idxMap[k] || k) })
+    }
+}
+
+function bridge(it) {
+    const ks = it.keys || []
+    if (!ks.length) return
+    if (ks.length === 1) {
+        toggleSym(ks[0])
+        return
+    }
+    uni.showActionSheet({
+        itemList: ks.map((k) => (selected[k] ? '✓ ' : '　') + (idxMap[k] || k)),
+        success: (res) => toggleSym(ks[res.tapIndex])
+    })
+}
 const symTip = {} // 舌/脉症状 id -> atlas 对照文字（长按查看）
 const atlasOpen = ref(false)
 const atlasTab = ref('she')
@@ -994,6 +1052,67 @@ function fmt(ts) {
 
 .atlas-main {
     flex: 1;
+}
+
+/* 舌脉图反向桥接 */
+.atlas-fig {
+    position: relative;
+    border-radius: 16rpx;
+    padding: 6rpx;
+}
+
+.atlas-fig.can {
+    border: 1px dashed rgba(139, 58, 58, 0.35);
+}
+
+.atlas-fig.pick {
+    border: 1px solid #8b3a3a;
+    background: rgba(139, 58, 58, 0.08);
+}
+
+.fig-mark {
+    position: absolute;
+    top: -6rpx;
+    right: -6rpx;
+    width: 32rpx;
+    height: 32rpx;
+    line-height: 32rpx;
+    border-radius: 50%;
+    background: #8b3a3a;
+    color: #fffdf7;
+    font-size: 22rpx;
+    text-align: center;
+}
+
+.atlas-bridge {
+    display: block;
+    font-size: 22rpx;
+    color: #a8642f;
+    margin: 6rpx 0 4rpx;
+}
+
+/* 十问歌卡 */
+.song-card {
+    background: linear-gradient(135deg, rgba(181, 147, 90, 0.12), rgba(139, 58, 58, 0.06));
+    border: 1px solid rgba(181, 147, 90, 0.45);
+    border-radius: 16rpx;
+    padding: 22rpx 26rpx;
+    margin-bottom: 20rpx;
+}
+
+.song-text {
+    display: block;
+    font-size: 27rpx;
+    color: #5c2018;
+    line-height: 1.9;
+}
+
+.song-tip {
+    display: block;
+    font-size: 21rpx;
+    color: #a08c68;
+    margin-top: 10rpx;
+    text-align: right;
 }
 .atlas-head {
     display: flex;
