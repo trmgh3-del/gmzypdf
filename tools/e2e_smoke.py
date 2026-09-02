@@ -165,6 +165,36 @@ if 'against' not in diagjs or 'RED_FLAGS' not in diagjs:
     err('diagnosis.js 缺少反证/红旗')
 print(f'  鉴别 {len(vs)} 对 · 反证 {len(neg)} 条 · 医案 {med_n}/45 · 看案辨证 {len(dq.get("items", []))} 题零泄题')
 
+# 9) 问诊引导轨道
+print('\n[9] 问诊引导')
+guide = load('diag', 'guide.json')
+tracks = guide.get('tracks', [])
+sym_all = {it['id'] for g in rules['groups'] for it in g['items']}
+if len(tracks) < 8:
+    err(f'问诊轨道 {len(tracks)} < 8')
+n_step = 0
+bad_ref = None
+for tr in tracks:
+    for sid in tr.get('base', []):
+        if sid not in sym_all:
+            bad_ref = f'{tr["id"]}.base/{sid}'
+    for st in tr.get('steps', []):
+        n_step += 1
+        for o in st.get('opts', []):
+            for sid in o.get('add', []):
+                if sid not in sym_all:
+                    bad_ref = f"{tr['id']}/{st['q'][:8]}/{sid}"
+if bad_ref:
+    err(f'问诊轨道引用越界 {bad_ref}')
+if n_step < 35:
+    err(f'问诊步骤仅 {n_step} < 35')
+for key in ('startGuide', 'pickTrack', 'chooseOpt', 'gBack', 'finishGuide', 'loadDiagGuide'):
+    if key not in diagvue and key != 'loadDiagGuide':
+        err(f'diag.vue 缺少问诊引导 {key}')
+if 'loadDiagGuide' not in open(os.path.join(APP, 'common/learn.js'), encoding='utf-8').read():
+    err('learn.js 缺少 loadDiagGuide')
+print(f'  问诊轨道 {len(tracks)} 条 · {n_step} 问，引用全部闭合')
+
 print()
 if fail:
     print(f'FAILED: {len(fail)} 项')

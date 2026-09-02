@@ -71,6 +71,62 @@
                 <text class="ce-op serif-font">开考 ›</text>
             </view>
             <text class="ce-acc" v-if="(store.learn.diagQuiz || {}).done">累计 {{ dqAcc }} 正确</text>
+
+            <!-- 问诊引导入口 -->
+            <view class="case-entry guide-entry" @tap="startGuide">
+                <view class="ce-left">
+                    <text class="ce-in serif-font">🧭 问诊引导</text>
+                    <text class="ce-desc">按主诉分步追问（发热/咳嗽/脘腹/二便/经带/小儿/情志/腰膝浮肿），答完自动辨证</text>
+                </view>
+                <text class="ce-op serif-font">开始 ›</text>
+            </view>
+        </template>
+
+        <!-- 问诊引导 -->
+        <template v-else-if="step === 'guide'">
+            <view class="result-head">
+                <button class="btn ghost" @tap="leaveGuide">‹ 返回勾选</button>
+                <text class="result-count serif-font">问诊引导</text>
+                <text class="case-round serif-font">已记 {{ selectedCount }} 症</text>
+            </view>
+
+            <!-- 主诉选择 -->
+            <view v-if="gPhase === 'list'">
+                <view class="guide">
+                    <text class="guide-title serif-font">从最不适的地方开始</text>
+                    <text class="guide-text">选一个主诉，按教材问诊思路逐层追问，答完自动辨证；与勾选页完全联动</text>
+                </view>
+                <view v-for="tr in guides" :key="tr.id" class="gtrack" @tap="pickTrack(tr)">
+                    <text class="gtrack-icon">{{ tr.icon }}</text>
+                    <view class="gtrack-info">
+                        <text class="gtrack-name serif-font">{{ tr.name }}</text>
+                        <text class="gtrack-desc">{{ tr.desc }} · {{ tr.steps.length }} 问</text>
+                    </view>
+                    <text class="gtrack-go serif-font">开始 ›</text>
+                </view>
+            </view>
+
+            <!-- 分步问诊 -->
+            <view v-else class="gqa">
+                <view class="gqa-head">
+                    <text class="gqa-track serif-font">{{ gTrack.icon }} {{ gTrack.name }}</text>
+                    <text class="gqa-prog serif-font">第 {{ gStepIdx + 1 }} / {{ gTrack.steps.length }} 问</text>
+                </view>
+                <view class="gqa-bar"><view class="gqa-fill" :style="{ width: gProgPct + '%' }" /></view>
+                <view class="gqa-card">
+                    <text class="gqa-q serif-font">{{ gStep.q }}</text>
+                    <view class="gqa-opts">
+                        <view v-for="o in gStep.opts" :key="o.t" class="gqa-opt" @tap="chooseOpt(o)">
+                            <text class="gqa-opt-t">{{ o.t }}</text>
+                        </view>
+                    </view>
+                </view>
+                <view class="gqa-foot">
+                    <text class="gqa-nav" @tap="gSkip">跳过本问</text>
+                    <text v-if="gStepIdx > 0" class="gqa-nav" @tap="gBack">‹ 上一问</text>
+                    <text class="gqa-nav accent" @tap="finishGuide">直接辨证 ›</text>
+                </view>
+            </view>
         </template>
 
         <!-- 医案辨证做题 -->
@@ -270,7 +326,7 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
-import { loadDiagRules, loadDeck, loadDiagAtlas, loadDiagQuiz } from '../../common/learn.js'
+import { loadDiagRules, loadDeck, loadDiagAtlas, loadDiagQuiz, loadDiagGuide } from '../../common/learn.js'
 import { diagnose, symptomIndex, findVs, RED_FLAGS } from '../../common/diagnosis.js'
 import { store, pending, pushDiagRecord, clearDiagHistory, pushDiagQuiz } from '../../common/store.js'
 import { applyNavTheme } from '../../common/theme.js'
@@ -445,6 +501,89 @@ async function startCase() {
     caseDone.value = false
     step.value = 'case'
     uni.pageScrollTo({ scrollTop: 0, duration: 0 })
+}
+
+// ---- 问诊引导 ----
+const guides = ref([])
+const gPhase = ref('list') // list 主诉 | qa 分步
+const gTrack = ref(null)
+const gStepIdx = ref(0)
+const gLog = ref([]) // [{ids:[...]}] 记录每一步加过的症状，供回退撤销
+
+const gStep = computed(() => {
+    const t = gTrack.value
+    return t && t.steps[gStepIdx.value] ? t.steps[gStepIdx.value] : { q: '', opts: [] }
+})
+const gProgPct = computed(() =>
+    gTrack.value ? Math.round(((gStepIdx.value + 1) / gTrack.value.steps.length) * 100) : 0
+)
+
+async function startGuide() {
+    const g = await loadDiagGuide()
+    guides.value = g.tracks || []
+    gPhase.value = 'list'
+    gTrack.value = null
+    step.value = 'guide'
+    uni.pageScrollTo({ scrollTop: 0, duration: 0 })
+}
+
+function pickTrack(tr) {
+    gTrack.value = tr
+    gStepIdx.value = 0
+    gLog.value = []
+    const base = (tr.base || []).slice()
+    if (base.length) {
+        base.forEach((id) => { selected[id] = true })
+        gLog.value.push({ ids: base })
+    }
+    gPhase.value = 'qa'
+}
+
+function chooseOpt(o) {
+    const ids = (o.add || []).slice()
+    ids.forEach((id) => { selected[id] = true })
+    gLog.value.push({ ids })
+    gAdvance()
+}
+
+function gSkip() {
+    gLog.value.push({ ids: [] })
+    gAdvance()
+}
+
+function gAdvance() {
+    if (gStepIdx.value + 1 >= gTrack.value.steps.length) {
+        finishGuide()
+        return
+    }
+    gStepIdx.value++
+    uni.pageScrollTo({ scrollTop: 0, duration: 0 })
+}
+
+function gBack() {
+    const last = gLog.value.pop() || { ids: [] }
+    const remain = new Set()
+    gLog.value.forEach((l) => l.ids.forEach((id) => remain.add(id)))
+    ;(last.ids || []).forEach((id) => {
+        if (!remain.has(id)) delete selected[id]
+    })
+    if (gStepIdx.value > 0) gStepIdx.value--
+    else finishGuideCancel()
+}
+
+function finishGuideCancel() {
+    gPhase.value = 'list'
+    gTrack.value = null
+}
+
+function finishGuide() {
+    finishGuideCancel()
+    run()
+}
+
+function leaveGuide() {
+    step.value = 'pick'
+    finishGuideCancel()
 }
 
 function pickCase(c) {
@@ -1185,4 +1324,47 @@ function fmt(ts) {
 .co-btn { font-size: 27rpx; border-radius: 14rpx; padding: 16rpx 36rpx; }
 .co-btn.ghost { border: 1rpx solid #c9bfa8; color: #8d8371; }
 .co-btn.solid { background: #8b3a3a; color: #f3e9d2; }
+
+/* ---- 问诊引导 ---- */
+.gtrack {
+    display: flex;
+    align-items: center;
+    background: #fffdf7;
+    border: 2rpx solid #e4dcc8;
+    border-radius: 16rpx;
+    padding: 22rpx 24rpx;
+    margin-bottom: 14rpx;
+}
+
+.gtrack-icon { font-size: 44rpx; margin-right: 18rpx; }
+.gtrack-info { flex: 1; }
+.gtrack-name { font-size: 30rpx; color: #5c2018; font-weight: 700; }
+.gtrack-desc { font-size: 22rpx; color: #8d8371; margin-top: 4rpx; }
+.gtrack-go { font-size: 26rpx; color: #8b3a3a; }
+
+.gqa-head { flex-direction: row; display: flex; justify-content: space-between; align-items: center; margin-bottom: 12rpx; }
+.gqa-track { font-size: 28rpx; color: #5c2018; font-weight: 700; }
+.gqa-prog { font-size: 24rpx; color: #a39880; }
+
+.gqa-bar { height: 10rpx; background: #efe8d6; border-radius: 6rpx; overflow: hidden; margin-bottom: 20rpx; }
+.gqa-fill { height: 100%; background: #8b3a3a; border-radius: 6rpx; }
+
+.gqa-card { background: #fffdf7; border: 2rpx solid #e4dcc8; border-radius: 20rpx; padding: 32rpx 28rpx; }
+.gqa-q { font-size: 32rpx; color: #3a3226; font-weight: 600; line-height: 1.6; }
+
+.gqa-opts { margin-top: 26rpx; display: flex; flex-direction: column; gap: 16rpx; }
+.gqa-opt { border: 2rpx solid #e4dcc8; border-radius: 14rpx; padding: 22rpx 26rpx; }
+.gqa-opt-t { font-size: 28rpx; color: #3a3226; }
+
+.gqa-foot {
+    margin-top: 28rpx;
+    flex-direction: row;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 8rpx 30rpx;
+}
+
+.gqa-nav { font-size: 26rpx; color: #8d8371; }
+.gqa-nav.accent { color: #8b3a3a; font-weight: 600; }
 </style>

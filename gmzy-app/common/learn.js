@@ -71,6 +71,11 @@ export function loadDiagQuiz() {
     return cached('static/diag/diag-quiz.json')
 }
 
+// ---- 问诊引导轨道 ----
+export function loadDiagGuide() {
+    return cached('static/diag/guide.json')
+}
+
 // ---- 辨证规则 ----
 export function loadDiagRules() {
     return cached('static/diag/rules.json')
